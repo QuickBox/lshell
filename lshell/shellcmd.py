@@ -37,15 +37,15 @@ class ShellCmd(cmd.Cmd, object):
 
     def __init__(self, userconf, args, stdin=None, stdout=None, stderr=None,
                  g_cmd=None, g_line=None):
-        if stdin is None:
+        if stdin == None:
             self.stdin = sys.stdin
         else:
             self.stdin = stdin
-        if stdout is None:
+        if stdout == None:
             self.stdout = sys.stdout
         else:
             self.stdout = stdout
-        if stderr is None:
+        if stderr == None:
             self.stderr = sys.stderr
         else:
             self.stderr = stderr
@@ -400,7 +400,7 @@ class ShellCmd(cmd.Cmd, object):
         self.g_cmd, self.g_arg, self.g_line = [cmd, arg, line]
         if not line:
             return self.emptyline()
-        if cmd is None:
+        if cmd == None:
             return self.default(line)
         self.lastcmd = line
         if cmd == '':

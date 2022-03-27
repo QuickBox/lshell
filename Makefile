@@ -3,7 +3,7 @@
 # $Id: Makefile,v 1.16 2010-03-06 23:11:38 ghantoos Exp $
 #
 
-PYTHON=`which python`
+PYTHON=`/usr/bin/python3`
 DESTDIR=/
 BUILDIR=$(CURDIR)/debian/lshell
 PROJECT=lshell
