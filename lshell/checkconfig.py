@@ -47,15 +47,15 @@ class CheckConfig:
                  stdin=None, stdout=None, stderr=None):
         """ Force the calling of the methods below
         """
-        if stdin == None:
+        if stdin is None:
             self.stdin = sys.stdin
         else:
             self.stdin = stdin
-        if stdout == None:
+        if stdout is None:
             self.stdout = sys.stdout
         else:
             self.stdout = stdout
-        if stderr == None:
+        if stderr is None:
             self.stderr = sys.stderr
         else:
             self.stderr = stderr
@@ -124,7 +124,7 @@ class CheckConfig:
         """ Load environment variable set in configuration file """
         if 'env_vars' in self.conf:
             env_vars = self.conf['env_vars']
-            for key in env_vars.keys():
+            for key in list(env_vars.keys()):
                 os.environ[key] = str(env_vars[key])
 
     def check_file(self, file):
@@ -341,7 +341,7 @@ class CheckConfig:
                             # remove double slashes
                             liste[0] = liste[0].replace("//", "/")
                             self.conf_raw.update({key: str(liste)})
-                        elif stuff and type(eval(stuff)) == list:
+                        elif stuff and type(eval(stuff)) is list:
                             self.conf_raw.update({key: stuff})
                 # case allowed is set to 'all'
                 elif key == 'allowed' and split[0] == "'all'":
@@ -423,7 +423,7 @@ class CheckConfig:
         In case fields are missing, the user is notified and exited from lshell
         """
         for item in variables.required_config:
-            if item not in self.conf_raw.keys():
+            if item not in list(self.conf_raw.keys()):
                 self.log.critical("ERROR: Missing parameter '%s'" % item)
                 self.log.critical('ERROR: Add it in the in the [%s] '
                                   'or [default] section of conf file.'
@@ -550,7 +550,7 @@ class CheckConfig:
 
         if os.path.isdir(self.conf['home_path']):
             # change dir to home when initially loading the configuration
-            if self.refresh == None:
+            if self.refresh is None:
                 os.chdir(self.conf['home_path'])
             # if reloading the configuration, do not change directory
             else:
@@ -631,7 +631,7 @@ class CheckConfig:
 
                 # check if sftp is requested and allowed
                 if 'sftp-server' in self.conf['ssh']:
-                    if self.conf['sftp'] == 1:
+                    if self.conf['sftp'] is 1:
                         self.log.error('SFTP connect')
                         retcode = utils.exec_cmd(self.conf['ssh'])
                         self.log.error('SFTP disconnect')
@@ -653,7 +653,7 @@ class CheckConfig:
 
                 # check if scp is requested and allowed
                 if self.conf['ssh'].startswith('scp '):
-                    if self.conf['scp'] == 1 or 'scp' in self.conf['overssh']:
+                    if self.conf['scp'] is 1 or 'scp' in self.conf['overssh']:
                         if ' -f ' in self.conf['ssh']:
                             # case scp download is allowed
                             if self.conf['scp_download']:
@@ -762,7 +762,7 @@ class CheckConfig:
                 self.conf_raw['path_noexec'])
             # if path_noexec is empty, disable LD_PRELOAD
             # /!\ this feature should be used at the administrator's own risks!
-            if self.conf['path_noexec'] == '':
+            if self.conf['path_noexec'] is '':
                 return
             if not os.path.exists(self.conf['path_noexec']):
                 self.log.critical(
@@ -811,3 +811,4 @@ class CheckConfig:
     def returnconf(self):
         """ returns the configuration dict """
         return self.conf
+

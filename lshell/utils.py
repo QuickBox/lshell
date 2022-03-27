@@ -56,7 +56,7 @@ def get_aliases(line, aliases):
     """ Replace all configured aliases in the line
     """
 
-    for item in aliases.keys():
+    for item in list(aliases.keys()):
         escaped_item = re.escape(item)
         reg1 = '(^|;|&&|\|\||\|)\s*%s([ ;&\|]+|$)(.*)' % escaped_item
         reg2 = '(^|;|&&|\|\||\|)\s*%s([ ;&\|]+|$)' % escaped_item

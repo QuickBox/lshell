@@ -37,15 +37,15 @@ class ShellCmd(cmd.Cmd, object):
 
     def __init__(self, userconf, args, stdin=None, stdout=None, stderr=None,
                  g_cmd=None, g_line=None):
-        if stdin == None:
+        if stdin is None:
             self.stdin = sys.stdin
         else:
             self.stdin = stdin
-        if stdout == None:
+        if stdout is None:
             self.stdout = sys.stdout
         else:
             self.stdout = stdout
-        if stderr == None:
+        if stderr is None:
             self.stderr = sys.stderr
         else:
             self.stderr = stderr
@@ -246,9 +246,9 @@ class ShellCmd(cmd.Cmd, object):
                         try:
                             # raw_input renamed as input in py3
                             try:
-                                line = raw_input(self.conf['promptprint'])
-                            except NameError:
                                 line = input(self.conf['promptprint'])
+                            except NameError:
+                                line = eval(input(self.conf['promptprint']))
                         except EOFError:
                             line = 'EOF'
                         except KeyboardInterrupt:
@@ -400,7 +400,7 @@ class ShellCmd(cmd.Cmd, object):
         self.g_cmd, self.g_arg, self.g_line = [cmd, arg, line]
         if not line:
             return self.emptyline()
-        if cmd == None:
+        if cmd is None:
             return self.default(line)
         self.lastcmd = line
         if cmd == '':
