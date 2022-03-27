@@ -23,7 +23,7 @@ import os
 try:
     import configparser
 except ImportError:
-    import ConfigParser as configparser
+    import configparser as configparser
 from getpass import getuser
 import string
 import re
@@ -811,4 +811,3 @@ class CheckConfig:
     def returnconf(self):
         """ returns the configuration dict """
         return self.conf
-
