@@ -1,7 +1,7 @@
 %define name lshell
 %define version 0.9.16
 %define release 1
-%define python_sitelib %(python -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")
+%define python_sitelib %(python3 -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")
 
 Summary: Limited Shell
 Name: %{name}
@@ -12,8 +12,8 @@ License: GPL
 Group: System Environment/Shells
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
 Prefix: %{_prefix}
-BuildRequires:  python >= 2.4
-Requires:   python >= 2.4
+BuildRequires:  python >= 3.9
+Requires:   python >= 3.9
 BuildArch: noarch
 Vendor: Ignace Mouzannar (ghantoos) <mouzannar@gmail.com>
 Url: http://lshell.ghantoos.org

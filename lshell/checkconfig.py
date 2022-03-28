@@ -19,6 +19,7 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
+sys.path.append("/usr/local/lib/python3.9/dist-packages/")
 import os
 try:
     import configparser

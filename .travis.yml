@@ -1,4 +1,4 @@
-language: python3
+language: python
 install:
   - pip3 install tox
   - sudo apt-get install python3-enchant
