@@ -1,7 +1,7 @@
-language: python
+language: python3
 install:
-  - pip install tox
-  - sudo apt-get install python-enchant
+  - pip3 install tox
+  - sudo apt-get install python3-enchant
 script:
   - tox
 env:
