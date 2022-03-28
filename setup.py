@@ -17,8 +17,6 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from distutils.core import setup
-import sys
-sys.path.append("/usr/local/lib/python3.9/dist-packages/")
 
 # import lshell specifics
 from lshell.variables import __version__
