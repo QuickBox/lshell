@@ -8,16 +8,19 @@ Note: all the following information (and more) can be found in the manpage - ```
 Installation
 ----------------
 
+	> **Note:** This project has been forked from [ghantoos/lshell](https://github.com/ghantoos/lshell) as it has been abandoned by the original author. This fork is intended to keep the project alive and to add new features and bug fixes. The use of setup.py has been removed in favor of flit and the project has been updated to support Python 3.9+. `setup.py` is being deprecated from python and will be removed in Python 3.12. See [PEP 632](https://www.python.org/dev/peps/pep-0632/) for more information. As a result, the installation instructions have been updated to reflect the new installation process using flit and pip.
+
+
     1. Install from source
             # on Linux:
-            python setup.py install --no-compile --install-scripts=/usr/bin/
-            # on *BSD:
-            python setup.py install --no-compile --install-data=/usr/{pkg,local}/
-    2. On Debian (or derivatives)
-            apt-get install lshell
-    3.  On RHEL (or derivatives)
-            yum install lshell
-            dnf install lshell for Fedora and future versions of RHEL
+			Install dependencies, in this case python3 and python3-pip. You will also need the flit package (`pip3 install flit`). 
+			Then run the following commands:
+			```bash
+			git clone https://lab.quickbox.io/jmsolo/lshell.git /path/to/lshell
+			cd /path/to/lshell
+			flit build
+            python3 -m pip install -m pip install dist/lshell-*.tar.gz
+			```
 
 
 Configuration
