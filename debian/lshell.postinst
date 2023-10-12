@@ -9,25 +9,25 @@
 set -e
 
 case "$1" in
-    configure)
-    # add lshell group, and make it own the default log file
-    if ! getent group lshell 2>&1 > /dev/null; then
-        addgroup --system lshell
-    fi
+configure)
+	# add lshell group, and make it own the default log file
+	if ! getent group lshell 2>&1 >/dev/null; then
+		addgroup --system lshell
+	fi
 
-    chown root:lshell /var/log/lshell/
-    chmod -R 770 /var/log/lshell/
+	chown root:lshell /var/log/lshell/
+	chmod -R 770 /var/log/lshell/
 
-    add-shell /usr/bin/lshell
-    ;;
+	add-shell /usr/bin/lshell
+	;;
 
-    abort-upgrade|abort-remove|abort-deconfigure)
-    ;;
+abort-upgrade | abort-remove | abort-deconfigure) ;;
 
-    *)
-        echo "postinst called with unknown argument \`$1'" >&2
-        exit 1
-    ;;
+\
+	*)
+	echo "postinst called with unknown argument \`$1'" >&2
+	exit 1
+	;;
 esac
 
 exit 0

@@ -1,0 +1,14 @@
+[tool.flit.metadata]
+module = "lshell"
+author = "JMSolo"
+author-email = "support@quickbox.io"
+home-page = "https://lab.quickbox.io/jmsolo/lshell"
+license = "GPL-3.0"
+description-file = "README.md"
+
+[build-system]
+requires = ["flit_core"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.scripts]
+lshell = "bin.lshell"

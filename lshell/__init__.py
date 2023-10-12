@@ -17,3 +17,10 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+Limited Shell (lshell)
+
+This module provides functionality for the Limited Shell (lshell) application.
+It allows you to restrict the environment of users and configure allowed commands.
+"""
+__version__ = "0.9.18"
