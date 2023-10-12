@@ -21,7 +21,7 @@ Installation
       git clone https://lab.quickbox.io/jmsolo/lshell.git /path/to/lshell
 	  cd /path/to/lshell
 	  flit build
-	  python3 -m pip install -m pip install dist/lshell-*.tar.gz
+	  python3 -m pip install dist/lshell-*.tar.gz
       ```
 
 
