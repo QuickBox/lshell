@@ -10,7 +10,7 @@ Installation
 ----------------
 
 > [!IMPORTANT]   
-> This project has been forked from [ghantoos/lshell](https://github.com/ghantoos/lshell) as it has been abandoned by the original author. This fork is intended to keep the project alive and to add new features and bug fixes. The use of setup.py has been removed in favor of flit and the project has been updated to support Python 3.9+. `setup.py` is being deprecated from python and will be removed in Python 3.12. See [PEP 632](https://www.python.org/dev/peps/pep-0632/) for more information. As a result, the installation instructions have been updated to reflect the new installation process using flit and pip.
+> This project has been forked from [ghantoos/lshell](https://github.com/ghantoos/lshell) as it has been abandoned by the original author. This fork is intended to keep the project alive and to add new features and bug fixes. The use of setup.py has been removed in favor of flit and the project has been updated to support Python 3.9+. `setup.py` has been removed as it utilized `distutils`, which is being deprecated from python and will be removed in Python 3.12. See [PEP 632](https://www.python.org/dev/peps/pep-0632/) for more information. As a result, the installation instructions have been updated to reflect the new installation process using flit and pip.
 
 
 ### 1. Install from source
