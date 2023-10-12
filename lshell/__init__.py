@@ -24,3 +24,36 @@ This module provides functionality for the Limited Shell (lshell) application.
 It allows you to restrict the environment of users and configure allowed commands.
 """
 __version__ = "0.9.18"
+import os
+import sys
+
+# import lshell specifics
+from lshell.shellcmd import ShellCmd, LshellTimeOut
+from lshell.checkconfig import CheckConfig
+
+
+def main():
+    """main function"""
+    # set SHELL and get LSHELL_ARGS env variables
+    os.environ["SHELL"] = os.path.realpath(sys.argv[0])
+    if "LSHELL_ARGS" in os.environ:
+        args = sys.argv[1:] + eval(os.environ["LSHELL_ARGS"])
+    else:
+        args = sys.argv[1:]
+
+    userconf = CheckConfig(args).returnconf()
+
+    try:
+        cli = ShellCmd(userconf, args)
+        cli.cmdloop()
+
+    except (KeyboardInterrupt, EOFError):
+        sys.stdout.write("\nExited on user request\n")
+        sys.exit(0)
+    except LshellTimeOut:
+        userconf["logpath"].error("Timer expired")
+        sys.stdout.write("\nTime is up.\n")
+
+
+if __name__ == "__main__":
+    main()
