@@ -113,6 +113,6 @@ Contact
 ----------------
 If you want to contribute to this project, please do not hesitate. Open an issue and, if possible, send a pull request.
 
-Please use the original github for all requests: https://github.com/ghantoos/lshell/issues as I am only maintaining this fork to keep the project alive. I will occasionally merge in changes from the original repo, but I will not be actively developing this fork unless there is a need to do so.
+Please use the original github for all requests: https://github.com/ghantoos/lshell/issues as I am only maintaining this fork to keep the project alive. I will occasionally check the issues/PR there and work on them **here** as time permits. I am not taking any credit for this project, nor am I offering any support for it. I am simply keeping it alive and making any necessary adjustments for those who wish to use it.
 
 Cheers
