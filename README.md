@@ -1,3 +1,4 @@
+
 lshell - limited shell  [![Build Status](https://travis-ci.org/ghantoos/lshell.svg?branch=master)](https://travis-ci.org/ghantoos/lshell)
 ======================
 
@@ -8,19 +9,20 @@ Note: all the following information (and more) can be found in the manpage - ```
 Installation
 ----------------
 
-> **Note:** This project has been forked from [ghantoos/lshell](https://github.com/ghantoos/lshell) as it has been abandoned by the original author. This fork is intended to keep the project alive and to add new features and bug fixes. The use of setup.py has been removed in favor of flit and the project has been updated to support Python 3.9+. `setup.py` is being deprecated from python and will be removed in Python 3.12. See [PEP 632](https://www.python.org/dev/peps/pep-0632/) for more information. As a result, the installation instructions have been updated to reflect the new installation process using flit and pip.
+> [!IMPORTANT]   
+> This project has been forked from [ghantoos/lshell](https://github.com/ghantoos/lshell) as it has been abandoned by the original author. This fork is intended to keep the project alive and to add new features and bug fixes. The use of setup.py has been removed in favor of flit and the project has been updated to support Python 3.9+. `setup.py` is being deprecated from python and will be removed in Python 3.12. See [PEP 632](https://www.python.org/dev/peps/pep-0632/) for more information. As a result, the installation instructions have been updated to reflect the new installation process using flit and pip.
 
 
-    1. Install from source
-            # on Linux:
-			Install dependencies, in this case python3 and python3-pip. You will also need the flit package (`pip3 install flit`). 
-			Then run the following commands:
-```bash
-git clone https://lab.quickbox.io/jmsolo/lshell.git /path/to/lshell
-cd /path/to/lshell
-flit build
-python3 -m pip install -m pip install dist/lshell-*.tar.gz
-```
+### 1. Install from source
+  - <strong>on Linux:</strong>
+    - Install dependencies, in this case python3 and python3-pip. You will also need the flit package (`pip3 install flit`). 
+    - Then run the following commands:
+	  ```bash
+      git clone https://lab.quickbox.io/jmsolo/lshell.git /path/to/lshell
+	  cd /path/to/lshell
+	  flit build
+	  python3 -m pip install -m pip install dist/lshell-*.tar.gz
+      ```
 
 
 Configuration
@@ -111,6 +113,6 @@ Contact
 ----------------
 If you want to contribute to this project, please do not hesitate. Open an issue and, if possible, send a pull request.
 
-Please use github for all requests: https://github.com/ghantoos/lshell/issues
+Please use the original github for all requests: https://github.com/ghantoos/lshell/issues as I am only maintaining this fork to keep the project alive. I will occasionally merge in changes from the original repo, but I will not be actively developing this fork unless there is a need to do so.
 
 Cheers
