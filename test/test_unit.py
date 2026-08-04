@@ -226,6 +226,33 @@ class TestFunctions(unittest.TestCase):
         INPUT = "echo'/1.sh'"
         return self.assertEqual(sec.check_secure(INPUT, self.userconf)[0], 1)
 
+    def test_29_checkpath_no_shell_injection(self):
+        """ U29 | check_path wildcard expansion must NOT execute a shell.
+            A path token carrying a command substitution (no spaces, so it
+            survives the operator split) previously reached a shell=True call
+            and ran. Assert the marker command never runs.
+        """
+        import tempfile
+        marker = os.path.join(tempfile.gettempdir(),
+                              "lshell_pwned_%s" % os.getpid())
+        if os.path.exists(marker):
+            os.remove(marker)
+        # $IFS supplies the space between "touch" and the path with no literal
+        # space in the token, so check_path keeps it as a single item.
+        INPUT = "ls x$(touch$IFS%s)y" % marker
+        sec.check_path(INPUT, self.userconf)
+        pwned = os.path.exists(marker)
+        if pwned:
+            os.remove(marker)
+        return self.assertFalse(pwned)
+
+    def test_30_checkpath_unset_var_still_blocks(self):
+        """ U30 | an unset variable must expand to empty (shell parity) so a
+            forbidden absolute path is still caught after the shell-free rewrite.
+        """
+        INPUT = 'cat "$undefined_var"/etc/passwd'
+        return self.assertEqual(sec.check_path(INPUT, self.userconf)[0], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

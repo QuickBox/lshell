@@ -21,6 +21,7 @@
 import sys
 import re
 import os
+import glob
 
 # import lshell specifics
 from lshell import utils
@@ -80,29 +81,30 @@ def check_path(line, conf, completion=None, ssh=None, strict=None):
         # replace "~" with home path
         item = os.path.expanduser(item)
 
-        # expand shell wildcards using "echo"
-        # i know, this a bit nasty...
-        if re.findall("\$|\*|\?", item):
+        # expand shell variables and wildcards WITHOUT invoking a shell.
+        # historically this ran "`which echo` <item>" through shell=True so the
+        # shell would expand $VAR and * ? globs, then took the first result.
+        # that handed the path checker a command-injection surface: a token
+        # like a$(cmd)b (no spaces, so it survives the split above) was executed
+        # by the shell before the path was ever validated. expand in-process
+        # instead, reproducing shell semantics without any shell:
+        #   $VAR / ${VAR} -> environment value, empty when unset (as the shell
+        #   does), then glob the pattern for * ? [ ] wildcards.
+        if re.findall(r"\$|\*|\?", item):
             # remove quotes if available
             item = re.sub("\"|'", "", item)
-            import subprocess
-
-            p = subprocess.Popen(
-                "`which echo` %s" % item,
-                shell=True,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+            # expand ${VAR} then $VAR; an unset variable becomes empty so a
+            # payload such as "$unset/etc/passwd" still resolves to the real
+            # forbidden path and is caught, matching the previous behaviour.
+            item = re.sub(
+                r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), ""), item
             )
-            cout = p.stdout
-
-            try:
-                item = cout.readlines()[0].decode("utf8").split(" ")[0]
-                item = item.strip()
-                item = os.path.expandvars(item)
-            except IndexError:
-                conf["logpath"].critical("*** Internal error: command not " "executed")
-                return 1, conf
+            item = re.sub(r"\$(\w+)", lambda m: os.environ.get(m.group(1), ""), item)
+            # expand wildcards; take the first match sorted (shell parity), else
+            # keep the literal pattern (matches shell nullglob-off behaviour).
+            globbed = sorted(glob.glob(item))
+            if globbed:
+                item = globbed[0]
 
         tomatch = os.path.realpath(item)
         if os.path.isdir(tomatch) and tomatch[-1] != "/":
