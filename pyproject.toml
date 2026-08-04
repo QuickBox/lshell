@@ -1,14 +1,31 @@
-[tool.flit.metadata]
-module = "lshell"
-author = "JMSolo"
-author-email = "support@quickbox.io"
-home-page = "https://lab.quickbox.io/jmsolo/lshell"
-license = "GPL-3.0"
-description-file = "README.md"
-
 [build-system]
-requires = ["flit_core"]
+requires = ["flit_core >=3.2,<5"]
 build-backend = "flit_core.buildapi"
 
-[tool.flit.scripts]
+[project]
+name = "lshell"
+description = "Limited Shell (lshell) restricts a user's environment to a configurable set of allowed commands."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "COPYING" }
+authors = [
+    { name = "JMSolo" },
+]
+keywords = ["shell", "restricted", "security", "seedbox"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Shells",
+    "Topic :: System :: Systems Administration",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/QuickBox/lshell"
+Support = "https://v3.quickbox.io/docs/support"
+
+[project.scripts]
 lshell = "lshell:main"
