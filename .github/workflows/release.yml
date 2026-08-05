@@ -4,10 +4,12 @@
 # the updater pip-installs it directly, so no build toolchain (flit) is needed
 # on a user box. Every release is gated on the unit-test suite passing first.
 #
-# Triggers:
-#   - push tag v* .......... stable release, artifacts attached, marked latest
+# Triggers (workflow_dispatch ONLY — deliberately no `push: tags` trigger, so
+# the tag this workflow pushes for a stable release can never retrigger it):
+#   - workflow_dispatch stable  auto-selects the next free patch version, bumps
+#       lshell/__init__.py, commits + tags it, and cuts a stable release. No
+#       manual __version__ edit is ever required.
 #   - workflow_dispatch dev  pre-release from current HEAD (kept to last 5)
-#   - workflow_dispatch stable  tags v<__version__> and cuts a stable release
 #
 # Runs on GitHub-hosted ubuntu-latest (like the test workflow): the build is a
 # pure flit/pip step with no self-hosted runner state, so it stays portable and
@@ -16,8 +18,6 @@
 name: release
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
     inputs:
       release_type:
@@ -71,47 +71,65 @@ jobs:
         continue-on-error: true
         run: python -m unittest discover -s test -p 'test_functional.py' -v
 
+      # Auto-versioning: a stable dispatch never needs a manual __version__ edit.
+      # The next patch version is selected automatically from __version__, walking
+      # past any already-released tag until a free one is found. dev keeps its
+      # SHA-embedded (inherently unique) tag and never bumps.
       - name: Determine version and tag
         id: version
         run: |
           set -euo pipefail
           MODULE_VERSION="$(python -c 'import lshell; print(lshell.__version__)')"
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            TAG="${GITHUB_REF_NAME}"
-            RELEASE_TYPE="stable"
-            # A tag release must match the module version, or the artifact
-            # filenames (lshell-<module_version>-*) will not match the tag.
-            if [[ "${TAG}" != "v${MODULE_VERSION}" ]]; then
-              echo "ERROR: tag ${TAG} does not match module __version__ v${MODULE_VERSION}" >&2
-              exit 1
-            fi
-            VERSION="${MODULE_VERSION}"
-          elif [[ "${{ inputs.release_type }}" == "stable" ]]; then
-            VERSION="${MODULE_VERSION}"
-            TAG="v${VERSION}"
-            RELEASE_TYPE="stable"
-            # A stable dispatch must never republish an existing version: the
-            # release action updates a found release in place and overwrites its
-            # same-named assets, so a run with a stale __version__ silently
-            # swaps the published wheel/sdist/SHA256SUMS under the old tag. Fail
-            # fast when the tag already exists on the remote.
-            if [[ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]]; then
-              echo "ERROR: tag ${TAG} already released — bump lshell/__init__.py __version__ before cutting a stable release" >&2
-              exit 1
-            fi
-          elif [[ "${{ inputs.release_type }}" == "dev" ]]; then
+          if [[ "${{ inputs.release_type }}" == "dev" ]]; then
             SHORT_SHA="$(git rev-parse --short HEAD)"
             VERSION="${MODULE_VERSION}-dev.${SHORT_SHA}"
-            TAG="v${VERSION}"
-            RELEASE_TYPE="dev"
-          else
+            echo "version=${VERSION}"      >> "${GITHUB_OUTPUT}"
+            echo "tag=v${VERSION}"         >> "${GITHUB_OUTPUT}"
+            echo "release_type=dev"        >> "${GITHUB_OUTPUT}"
+            echo "bumped=false"            >> "${GITHUB_OUTPUT}"
+            echo "Dev pre-release ${VERSION}"
+            exit 0
+          fi
+          if [[ "${{ inputs.release_type }}" != "stable" ]]; then
             echo "ERROR: unexpected release_type '${{ inputs.release_type }}' (expected stable or dev)" >&2
             exit 1
           fi
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
-          echo "release_type=${RELEASE_TYPE}" >> "${GITHUB_OUTPUT}"
-          echo "Version: ${VERSION} | Tag: ${TAG} | Type: ${RELEASE_TYPE}"
+          if [[ ! "${MODULE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: __version__ '${MODULE_VERSION}' is not MAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          # Start at __version__ and increment the patch until the tag is free.
+          # A stale __version__ simply advances past the released tags; the value
+          # committed back becomes the next cut's starting point.
+          IFS=. read -r MA MI PA <<<"${MODULE_VERSION}"
+          VERSION="${MODULE_VERSION}"
+          tries=0
+          while git ls-remote --tags origin "refs/tags/v${VERSION}" | grep -q .; do
+            PA=$((PA + 1))
+            VERSION="${MA}.${MI}.${PA}"
+            tries=$((tries + 1))
+            if [[ ${tries} -gt 100 ]]; then
+              echo "ERROR: no free v${MA}.${MI}.x tag within 100 increments of ${MODULE_VERSION}" >&2
+              exit 1
+            fi
+          done
+          BUMPED=false
+          [[ "${VERSION}" != "${MODULE_VERSION}" ]] && BUMPED=true
+          echo "version=${VERSION}"   >> "${GITHUB_OUTPUT}"
+          echo "tag=v${VERSION}"      >> "${GITHUB_OUTPUT}"
+          echo "release_type=stable"  >> "${GITHUB_OUTPUT}"
+          echo "bumped=${BUMPED}"     >> "${GITHUB_OUTPUT}"
+          echo "Stable release ${VERSION} (bumped from ${MODULE_VERSION}: ${BUMPED})"
+
+      # Write the resolved version into the source BEFORE build so the artifacts
+      # (lshell-<version>-*) and the module's own __version__ agree with the tag.
+      - name: Apply resolved version to source
+        if: steps.version.outputs.release_type == 'stable'
+        run: |
+          set -euo pipefail
+          sed -i "s/^__version__ = .*/__version__ = \"${{ steps.version.outputs.version }}\"/" lshell/__init__.py
+          grep -qx "__version__ = \"${{ steps.version.outputs.version }}\"" lshell/__init__.py
+          echo "lshell/__init__.py -> $(grep '^__version__' lshell/__init__.py)"
 
       # flit build reads the version from lshell.__version__ and produces both
       # the wheel (lshell-<version>-py3-none-any.whl) and sdist
@@ -131,6 +149,26 @@ jobs:
           cd dist
           sha256sum ./* > SHA256SUMS
           cat SHA256SUMS
+
+      # Persist the released state to the repo: commit the auto-bump (when the
+      # version advanced) and push the tag at that commit. Pushed with the
+      # checkout-persisted GITHUB_TOKEN — GitHub does not retrigger a workflow on
+      # a ref pushed by GITHUB_TOKEN, and this workflow has no push trigger
+      # anyway, so there is no release loop. Pushing an existing tag fails
+      # (no --force), which is the final backstop against overwriting a release.
+      - name: Commit version bump and push tag
+        if: steps.version.outputs.release_type == 'stable'
+        run: |
+          set -euo pipefail
+          git config user.name "QBXWatcher"
+          git config user.email "qbxwatcher@quickbox.io"
+          if [[ "${{ steps.version.outputs.bumped }}" == "true" ]]; then
+            git add lshell/__init__.py
+            git commit -m "chore(release): bump version to ${{ steps.version.outputs.version }}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
 
       - name: Create stable release
         if: steps.version.outputs.release_type == 'stable'
