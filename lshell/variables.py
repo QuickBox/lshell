@@ -94,6 +94,8 @@ configparams = [
     "winscp=",
     "disable_exit=",
     "include_dir=",
+    "max_processes=",
+    "command_timeout=",
 ]
 
 builtins_list = ["cd", "clear", "exit", "export", "history", "lpath", "lsudo"]

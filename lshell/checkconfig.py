@@ -505,6 +505,8 @@ class CheckConfig:
             "winscp",
             "disable_exit",
             "quiet",
+            "max_processes",
+            "command_timeout",
         ]:
             try:
                 if len(self.conf_raw[item]) == 0:
@@ -669,7 +671,7 @@ class CheckConfig:
                 if "sftp-server" in self.conf["ssh"]:
                     if self.conf["sftp"] == 1:
                         self.log.error("SFTP connect")
-                        retcode = utils.exec_cmd(self.conf["ssh"])
+                        retcode = utils.exec_cmd(self.conf["ssh"], self.conf)
                         self.log.error("SFTP disconnect")
                         sys.exit(retcode)
                     else:
@@ -743,7 +745,7 @@ class CheckConfig:
                                     'SCP: upload forbidden: "%s"' % self.conf["ssh"]
                                 )
                                 sys.exit(1)
-                        retcode = utils.exec_cmd(self.conf["ssh"])
+                        retcode = utils.exec_cmd(self.conf["ssh"], self.conf)
                         self.log.error("SCP disconnect")
                         sys.exit(retcode)
                     else:
@@ -768,7 +770,7 @@ class CheckConfig:
                         cli.do_help(None)
                         retcode = 0
                     else:
-                        retcode = utils.exec_cmd(self.conf["ssh"])
+                        retcode = utils.exec_cmd(self.conf["ssh"], self.conf)
                     self.log.error("Exited")
                     sys.exit(retcode)
 

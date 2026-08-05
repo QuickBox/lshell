@@ -268,7 +268,7 @@ class TestFunctions(unittest.TestCase):
         os.environ.pop('SSH_TTY', None)
         exec_calls = []
         orig = utils.exec_cmd
-        utils.exec_cmd = lambda cmd: exec_calls.append(cmd) or 0
+        utils.exec_cmd = lambda cmd, conf=None: exec_calls.append(cmd) or 0
         try:
             with self.assertRaises(SystemExit):
                 CheckConfig(args).returnconf()
@@ -290,7 +290,7 @@ class TestFunctions(unittest.TestCase):
         os.environ.pop('SSH_TTY', None)
         exec_calls = []
         orig = utils.exec_cmd
-        utils.exec_cmd = lambda cmd: exec_calls.append(cmd) or 0
+        utils.exec_cmd = lambda cmd, conf=None: exec_calls.append(cmd) or 0
         try:
             with self.assertRaises(SystemExit) as cm:
                 CheckConfig(args).returnconf()
@@ -371,6 +371,74 @@ class TestFunctions(unittest.TestCase):
         finally:
             os.chdir(cwd)
         return self.assertEqual(rc, 0)
+
+    def test_37_max_processes_caps_child_rlimit(self):
+        """ U37 | max_processes must cap the child's RLIMIT_NPROC soft limit.
+            The child reads its own limit and exits 0 only when it matches the
+            configured cap. No fork bomb is spawned -- the mechanism (setrlimit
+            in the preexec_fn) is asserted directly. Fails on the pre-fix code
+            (the limit was never applied, so it stayed at the inherited value).
+            RLIMIT_NPROC counts every task the real UID already holds, so the
+            cap is set above the current load (child can still fork) yet below
+            the inherited ceiling (proving the limit is lowered and applied).
+        """
+        import resource
+        from lshell import utils
+        soft, _hard = resource.getrlimit(resource.RLIMIT_NPROC)
+        # numeric /proc entries approximate the host's task count; a wide margin
+        # covers threads that top-level /proc does not list
+        approx_tasks = len([p for p in os.listdir("/proc") if p.isdigit()])
+        cap = approx_tasks + 5000
+        if soft != resource.RLIM_INFINITY and cap >= soft:
+            self.skipTest("runner RLIMIT_NPROC ceiling too low for a lowering test")
+        check = (
+            "python3 -c \"import resource,sys;"
+            "sys.exit(0 if resource.getrlimit(resource.RLIMIT_NPROC)[0]==%d"
+            " else 1)\"" % cap
+        )
+        rc = utils.exec_cmd(check, {"max_processes": cap})
+        return self.assertEqual(rc, 0)
+
+    def test_38_max_processes_disabled_leaves_rlimit(self):
+        """ U38 | max_processes = 0 (default) must NOT touch the child's
+            RLIMIT_NPROC -- the child inherits the parent's soft limit unchanged.
+        """
+        import resource
+        from lshell import utils
+        parent_soft = resource.getrlimit(resource.RLIMIT_NPROC)[0]
+        check = (
+            "python3 -c \"import resource,sys;"
+            "sys.exit(0 if resource.getrlimit(resource.RLIMIT_NPROC)[0]==%d"
+            " else 1)\"" % parent_soft
+        )
+        rc = utils.exec_cmd(check, {"max_processes": 0})
+        return self.assertEqual(rc, 0)
+
+    def test_39_command_timeout_kills_long_command(self):
+        """ U39 | command_timeout must kill a command that outruns it and return
+            the conventional timeout exit code (124), well before the command's
+            natural end. A finishing-early elapsed check proves the kill fired.
+        """
+        import time
+        from lshell import utils
+        start = time.time()
+        rc = utils.exec_cmd("sleep 10", {"command_timeout": 1})
+        elapsed = time.time() - start
+        self.assertEqual(rc, 124)
+        return self.assertLess(elapsed, 8)
+
+    def test_40_command_timeout_disabled_no_change(self):
+        """ U40 | with both controls disabled (0/0) behaviour is unchanged: a
+            short command returns its real exit code, and a command that
+            completes within an armed timeout is NOT killed (real code, not 124).
+        """
+        from lshell import utils
+        # both disabled -- real return codes pass through
+        self.assertEqual(utils.exec_cmd("true", {"command_timeout": 0,
+                                                 "max_processes": 0}), 0)
+        self.assertEqual(utils.exec_cmd("false"), 1)
+        # completes within an armed timeout -> real code, not the 124 timeout
+        return self.assertEqual(utils.exec_cmd("true", {"command_timeout": 5}), 0)
 
 
 if __name__ == "__main__":
