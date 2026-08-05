@@ -90,6 +90,15 @@ jobs:
             VERSION="${MODULE_VERSION}"
             TAG="v${VERSION}"
             RELEASE_TYPE="stable"
+            # A stable dispatch must never republish an existing version: the
+            # release action updates a found release in place and overwrites its
+            # same-named assets, so a run with a stale __version__ silently
+            # swaps the published wheel/sdist/SHA256SUMS under the old tag. Fail
+            # fast when the tag already exists on the remote.
+            if [[ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]]; then
+              echo "ERROR: tag ${TAG} already released — bump lshell/__init__.py __version__ before cutting a stable release" >&2
+              exit 1
+            fi
           elif [[ "${{ inputs.release_type }}" == "dev" ]]; then
             SHORT_SHA="$(git rev-parse --short HEAD)"
             VERSION="${MODULE_VERSION}-dev.${SHORT_SHA}"
