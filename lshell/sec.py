@@ -47,7 +47,6 @@ _DOLLARPAREN_RE = re.compile(r"\$\([^)]+[)]")
 _BACKTICK_RE = re.compile(r"\`[^`]+[`]")
 _CURLYBRACE_RE = re.compile(r"\$\{[^}]+[}]")
 _ASSIGNOP_RE = re.compile(r"=|\+|\?|\-")
-_TRAILPAREN_RE = re.compile(r"\)$")
 # the '&' / '|' "single but not doubled" guards, built with the original
 # per-item expression so behaviour is byte-for-byte identical.
 _AMP_PIPE_RE = {c: re.compile("[^\%s]\%s[^\%s]" % (c, c, c)) for c in ("&", "|")}
@@ -304,8 +303,6 @@ def check_secure(line, conf, strict=None, ssh=None):
     if start != len(line):
         lines.append(line[start : len(line)])
 
-    # remove trailing parenthesis
-    line = _TRAILPAREN_RE.sub("", line)
     for separate_line in lines:
         separate_line = " ".join(separate_line.split())
         splitcmd = separate_line.strip().split(" ")
