@@ -23,7 +23,7 @@ Limited Shell (lshell)
 This module provides functionality for the Limited Shell (lshell) application.
 It allows you to restrict the environment of users and configure allowed commands.
 """
-__version__ = "0.9.22"
+__version__ = "0.9.21"
 import os
 import sys
 
