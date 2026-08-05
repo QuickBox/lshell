@@ -1,0 +1,159 @@
+# Build and publish the installable lshell release artifacts (sdist + wheel).
+#
+# The wheel is what QuickBox servers install: the release proxy serves it and
+# the updater pip-installs it directly, so no build toolchain (flit) is needed
+# on a user box. Every release is gated on the unit-test suite passing first.
+#
+# Triggers:
+#   - push tag v* .......... stable release, artifacts attached, marked latest
+#   - workflow_dispatch dev  pre-release from current HEAD (kept to last 5)
+#   - workflow_dispatch stable  tags v<__version__> and cuts a stable release
+#
+# Runs on GitHub-hosted ubuntu-latest (like the test workflow): the build is a
+# pure flit/pip step with no self-hosted runner state, so it stays portable and
+# free of infrastructure coupling.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - stable
+
+permissions:
+  contents: write
+
+# Never cancel a release mid-publish: a run tags the commit and uploads the
+# artifacts. A superseding push queues behind it.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install flit pexpect
+          python -m pip install .
+
+      # Test gate: the unit suite must pass before anything is published.
+      - name: Unit tests
+        run: python -m unittest discover -s test -p 'test_unit.py' -v
+
+      # Functional suite spawns bin/lshell via pexpect. Non-blocking for the
+      # same reason as the test workflow (a path-portability fixture on
+      # usr-merged runners), so it does not gate the release.
+      - name: Functional tests (non-blocking)
+        continue-on-error: true
+        run: python -m unittest discover -s test -p 'test_functional.py' -v
+
+      - name: Determine version and tag
+        id: version
+        run: |
+          set -euo pipefail
+          MODULE_VERSION="$(python -c 'import lshell; print(lshell.__version__)')"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            RELEASE_TYPE="stable"
+            # A tag release must match the module version, or the artifact
+            # filenames (lshell-<module_version>-*) will not match the tag.
+            if [[ "${TAG}" != "v${MODULE_VERSION}" ]]; then
+              echo "ERROR: tag ${TAG} does not match module __version__ v${MODULE_VERSION}" >&2
+              exit 1
+            fi
+            VERSION="${MODULE_VERSION}"
+          elif [[ "${{ inputs.release_type }}" == "stable" ]]; then
+            VERSION="${MODULE_VERSION}"
+            TAG="v${VERSION}"
+            RELEASE_TYPE="stable"
+          else
+            SHORT_SHA="$(git rev-parse --short HEAD)"
+            VERSION="${MODULE_VERSION}-dev.${SHORT_SHA}"
+            TAG="v${VERSION}"
+            RELEASE_TYPE="dev"
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "release_type=${RELEASE_TYPE}" >> "${GITHUB_OUTPUT}"
+          echo "Version: ${VERSION} | Tag: ${TAG} | Type: ${RELEASE_TYPE}"
+
+      # flit build reads the version from lshell.__version__ and produces both
+      # the wheel (lshell-<version>-py3-none-any.whl) and sdist
+      # (lshell-<version>.tar.gz) in dist/.
+      - name: Build sdist and wheel
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          flit build
+          ls -lh dist/
+
+      # SHA256SUMS gives an independent integrity reference alongside the
+      # server-computed hash the proxy returns to the updater.
+      - name: Generate SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum ./* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create stable release
+        if: steps.version.outputs.release_type == 'stable'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.version }}
+          prerelease: false
+          make_latest: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/SHA256SUMS
+
+      - name: Create dev pre-release
+        if: steps.version.outputs.release_type == 'dev'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          prerelease: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/SHA256SUMS
+
+      - name: Cleanup old dev pre-releases
+        if: steps.version.outputs.release_type == 'dev'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --json tagName,isPrerelease --limit 100 \
+            | jq -r '.[] | select(.isPrerelease) | .tagName' \
+            | tail -n +6 \
+            | while read -r tag; do
+                echo "Deleting old pre-release: ${tag}"
+                gh release delete "${tag}" --yes --cleanup-tag 2>/dev/null || true
+              done
