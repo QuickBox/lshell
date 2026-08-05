@@ -123,13 +123,18 @@ jobs:
 
       # Write the resolved version into the source BEFORE build so the artifacts
       # (lshell-<version>-*) and the module's own __version__ agree with the tag.
+      # Two literals carry the version: lshell/__init__.py (authoritative — flit's
+      # dynamic version, and variables.py imports it for `lshell --version`) and
+      # the man page .TH header. Stamp both so neither skews from the release.
       - name: Apply resolved version to source
         if: steps.version.outputs.release_type == 'stable'
         run: |
           set -euo pipefail
           sed -i "s/^__version__ = .*/__version__ = \"${{ steps.version.outputs.version }}\"/" lshell/__init__.py
           grep -qx "__version__ = \"${{ steps.version.outputs.version }}\"" lshell/__init__.py
-          echo "lshell/__init__.py -> $(grep '^__version__' lshell/__init__.py)"
+          sed -i "s/^\(\.TH lshell 1 \"[^\"]*\" \)\"v[0-9][0-9.]*\"/\1\"v${{ steps.version.outputs.version }}\"/" man/lshell.1
+          grep -q "\"v${{ steps.version.outputs.version }}\"" man/lshell.1
+          echo "stamped -> $(grep '^__version__' lshell/__init__.py) | $(grep '^\.TH lshell' man/lshell.1)"
 
       # flit build reads the version from lshell.__version__ and produces both
       # the wheel (lshell-<version>-py3-none-any.whl) and sdist
@@ -163,7 +168,7 @@ jobs:
           git config user.name "QBXWatcher"
           git config user.email "qbxwatcher@quickbox.io"
           if [[ "${{ steps.version.outputs.bumped }}" == "true" ]]; then
-            git add lshell/__init__.py
+            git add lshell/__init__.py man/lshell.1
             git commit -m "chore(release): bump version to ${{ steps.version.outputs.version }}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
