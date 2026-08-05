@@ -136,7 +136,10 @@ class ShellCmd(cmd.Cmd, object):
             if self.conf["winscp"] and re.search(
                 "WinSCP: this is end-of-file", self.g_line
             ):
-                utils.exec_cmd('echo "WinSCP: this is end-of-file: %s"' % self.retcode)
+                utils.exec_cmd(
+                    'echo "WinSCP: this is end-of-file: %s"' % self.retcode,
+                    self.conf,
+                )
             return object.__getattribute__(self, attr)
         if self.g_cmd in self.conf["allowed"]:
             if self.conf["timer"] > 0:
@@ -171,7 +174,7 @@ class ShellCmd(cmd.Cmd, object):
                     self.retcode, self.conf = builtins.cd(directory, self.conf)
 
                     if self.retcode == 0:
-                        self.retcode = utils.exec_cmd(command)
+                        self.retcode = utils.exec_cmd(command, self.conf)
                 else:
                     # set directory to command line argument and change dir
                     directory = self.g_arg
@@ -198,7 +201,7 @@ class ShellCmd(cmd.Cmd, object):
                 self.retcode, self.conf = builtins.cd(directory, self.conf)
 
             else:
-                self.retcode = utils.exec_cmd(self.g_line)
+                self.retcode = utils.exec_cmd(self.g_line, self.conf)
 
         elif self.g_cmd not in ["", "?", "help", None]:
             self.log.warn('INFO: unknown syntax -> "%s"' % self.g_line)
@@ -236,7 +239,7 @@ class ShellCmd(cmd.Cmd, object):
             if self.intro and isinstance(self.intro, str):
                 self.stdout.write("%s\n" % self.intro)
             if self.conf["login_script"]:
-                utils.exec_cmd(self.conf["login_script"])
+                utils.exec_cmd(self.conf["login_script"], self.conf)
             stop = None
             while not stop:
                 if self.cmdqueue:
