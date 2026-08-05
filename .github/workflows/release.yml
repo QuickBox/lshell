@@ -90,11 +90,14 @@ jobs:
             VERSION="${MODULE_VERSION}"
             TAG="v${VERSION}"
             RELEASE_TYPE="stable"
-          else
+          elif [[ "${{ inputs.release_type }}" == "dev" ]]; then
             SHORT_SHA="$(git rev-parse --short HEAD)"
             VERSION="${MODULE_VERSION}-dev.${SHORT_SHA}"
             TAG="v${VERSION}"
             RELEASE_TYPE="dev"
+          else
+            echo "ERROR: unexpected release_type '${{ inputs.release_type }}' (expected stable or dev)" >&2
+            exit 1
           fi
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
