@@ -23,7 +23,7 @@ on:
       release_type:
         description: 'Release type'
         required: true
-        default: 'dev'
+        default: 'stable'
         type: choice
         options:
           - dev
