@@ -20,7 +20,10 @@
 
 import sys
 
-__version__ = "0.9.21"
+# single source of truth: lshell/__init__.py sets __version__ before it imports
+# any submodule, so this re-export never hits a partial-init cycle. Keeps the
+# `lshell --version` string and the packaged version from ever skewing.
+from lshell import __version__
 
 # Required config variable list per user
 required_config = ["allowed", "forbidden", "warning_counter"]
