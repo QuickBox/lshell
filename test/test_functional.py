@@ -10,6 +10,21 @@ from lshell import utils
 TOPDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 
+def _source_ip_token():
+    """Mirror lshell.checkconfig.set_source_ip so a fixture matches the security
+    log line's ' from <ip>' token in ANY environment: the SSH client address
+    when present (SSH_CONNECTION/SSH_CLIENT), else '-' (e.g. CI with no SSH)."""
+    import re
+    for var in ("SSH_CONNECTION", "SSH_CLIENT"):
+        tokens = os.environ.get(var, "").split()
+        if tokens and re.match(r"^[0-9A-Fa-f:.]{1,45}$", tokens[0]):
+            return " from %s" % tokens[0]
+    return " from -"
+
+
+FROM = _source_ip_token()
+
+
 class TestFunctions(unittest.TestCase):
 
     user = getuser()
@@ -63,7 +78,7 @@ class TestFunctions(unittest.TestCase):
 
     def test_05_external_echo_forbidden_syntax(self):
         """ F05 | echo forbidden syntax $(bleh) """
-        expected = "*** forbidden syntax -> \"echo $(uptime)\"\r\n*** You " \
+        expected = "*** forbidden syntax -> \"echo $(uptime)\"" + FROM + "\r\n*** You " \
             "have 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('echo $(uptime)')
@@ -90,7 +105,7 @@ class TestFunctions(unittest.TestCase):
 
     def test_07_builtin_cd_tilda(self):
         """ F07 | built-in cd - tilda bug """
-        expected = "*** forbidden path -> \"/etc/passwd\"\r\n*** You have" \
+        expected = "*** forbidden path -> \"/etc/passwd\"" + FROM + "\r\n*** You have" \
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls ~/../../etc/passwd')
@@ -100,7 +115,7 @@ class TestFunctions(unittest.TestCase):
 
     def test_08_builtin_cd_quotes(self):
         """ F08 | built-in - quotes in cd "/" """
-        expected = "*** forbidden path -> \"/\"\r\n*** You have" \
+        expected = "*** forbidden path -> \"/\"" + FROM + "\r\n*** You have" \
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls -ld "/"')
@@ -110,7 +125,7 @@ class TestFunctions(unittest.TestCase):
 
     def test_09_external_forbidden_path(self):
         """ F09 | external command forbidden path - ls /root """
-        expected = "*** forbidden path -> \"/root/\"\r\n*** You have" \
+        expected = "*** forbidden path -> \"/root/\"" + FROM + "\r\n*** You have" \
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls ~root')
@@ -120,7 +135,7 @@ class TestFunctions(unittest.TestCase):
 
     def test_10_builtin_cd_forbidden_path(self):
         """ F10 | built-in command forbidden path - cd ~root """
-        expected = "*** forbidden path -> \"/root/\"\r\n*** You have" \
+        expected = "*** forbidden path -> \"/root/\"" + FROM + "\r\n*** You have" \
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('cd ~root')
@@ -130,7 +145,7 @@ class TestFunctions(unittest.TestCase):
 
     def test_11_etc_passwd_1(self):
         """ F11 | /etc/passwd: empty variable 'ls "$a"/etc/passwd' """
-        expected = "*** forbidden path -> \"/etc/passwd\"\r\n*** You have" \
+        expected = "*** forbidden path -> \"/etc/passwd\"" + FROM + "\r\n*** You have" \
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls "$a"/etc/passwd')
@@ -140,7 +155,7 @@ class TestFunctions(unittest.TestCase):
 
     def test_12_etc_passwd_2(self):
         """ F12 | /etc/passwd: empty variable 'ls -l .*./.*./etc/passwd' """
-        expected = "*** forbidden path -> \"/etc/passwd\"\r\n*** You have" \
+        expected = "*** forbidden path -> \"/etc/passwd\"" + FROM + "\r\n*** You have" \
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls -l .*./.*./etc/passwd')
@@ -150,7 +165,7 @@ class TestFunctions(unittest.TestCase):
 
     def test_13_etc_passwd_3(self):
         """ F13 | /etc/passwd: empty variable 'ls -l .?/.?/etc/passwd' """
-        expected = "*** forbidden path -> \"/etc/passwd\"\r\n*** You have" \
+        expected = "*** forbidden path -> \"/etc/passwd\"" + FROM + "\r\n*** You have" \
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls -l .?/.?/etc/passwd')
@@ -272,7 +287,7 @@ class TestFunctions(unittest.TestCase):
                                    % (TOPDIR, TOPDIR))
         self.child.expect('%s:~\$' % self.user)
 
-        expected = "*** forbidden path: /var/"
+        expected = "*** forbidden path: /var/" + FROM
         self.child.sendline('cd /')
         self.child.expect('%s:/\$' % self.user)
         self.child.sendline('cd var')
@@ -381,7 +396,7 @@ class TestFunctions(unittest.TestCase):
         # hosts (/bin -> /usr/bin symlink: Debian 12/13, Ubuntu 22/24, the CI
         # runner) that is /usr/bin/bash, on split-usr hosts /bin/bash. Derive
         # the expectation the same way lshell does so the fixture is portable.
-        expected = u'*** forbidden path: %s' % os.path.realpath('/bin/bash')
+        expected = u'*** forbidden path: %s' % os.path.realpath('/bin/bash') + FROM
         self.child.sendline('awk \'BEGIN {system("/bin/bash")}\'')
         self.child.expect('%s:~\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
@@ -413,7 +428,7 @@ class TestFunctions(unittest.TestCase):
                                    % (TOPDIR, TOPDIR))
         self.child.expect('%s:~\$' % self.user)
 
-        expected = u'*** forbidden control char: echo\x0b() bash && echo\r'
+        expected = u'*** forbidden control char: echo\x0b() bash && echo' + FROM + u'\r'
         self.child.send('echo')
         self.child.sendcontrol('v')
         self.child.sendcontrol('k')
