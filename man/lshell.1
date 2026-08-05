@@ -1,7 +1,7 @@
 .\"
 .\"   Man page for the Limited Shell (lshell) project.
 .\"
-.TH lshell 1 "July, 2015" "v0.9.18"
+.TH lshell 1 "August, 2026" "v0.9.21"
 
 .SH NAME
 lshell \- Limited Shell
@@ -44,12 +44,13 @@ You can configure lshell through its configuration file:
 .ft 3
 .nf
 .sp
-On Linux \-> /etc/lshell.conf
-On *BSD  \-> /usr/{pkg,local}/etc/lshell.conf
+/etc/lshell.conf
 .ft
 .LP
 .RE
 .fi
+On QuickBox Pro the canonical configuration is maintained in the v3 repository
+(src/config/system/lshell/lshell.conf) and deployed to /etc/lshell.conf.
 The configuration is dynamically reloaded. Which means that you can edit
 the configuration, and all the connected users will automatically load it. In
 case you are using multiple configuration files (see include_dir), you will
@@ -140,6 +141,12 @@ while this should not be a common practice, setting this variable to an empty
 string will disable LD_PRELOAD prepend of the commands. This is done at your
 own risk, as lshell becomes easily breached using some commands like find(1)
 using the -exec flag.
+.TP
+.I path_noexec_strict
+fail-closed exec protection (QuickBox default). When set to 1, if the sudo
+noexec library cannot be located, lshell refuses to start rather than launching
+a restricted shell without exec protection. A missing backstop is treated as a
+hard failure, not a warning.
 .RS
 .SS [default] and/or [username] and/or [grp:groupname]
 .TP
@@ -443,18 +450,15 @@ In order to set lshell as default shell for a user:
 .ft 3
 .nf
 .sp
-On Linux:
 # chsh \-s /usr/bin/lshell user_name
-
-On *BSD:
-# chsh \-s /usr/{pkg,local}/bin/lshell user_name
 .ft
 .LP
 .RE
 .fi
 
 .SH AUTHOR
-Currently maintained by Ignace Mouzannar (ghantoos) 
+Originally written by Ignace Mouzannar (ghantoos). Maintained as a fork by
+QuickBox.IO, hardened for the QuickBox Pro platform.
 
-.SH EMAIL
-Feel free to send me your recommendations at <ghantoos@ghantoos.org>
+.SH SUPPORT
+QuickBox Pro support and documentation: https://v3.quickbox.io/docs/support

@@ -1,118 +1,78 @@
+# lshell — Limited Shell (QuickBox.IO fork)
 
-lshell - limited shell  [![Build Status](https://travis-ci.org/ghantoos/lshell.svg?branch=master)](https://travis-ci.org/ghantoos/lshell)
-======================
+`lshell` is a restricted login shell written in Python. It confines a user to a configurable set of allowed commands, keeps them inside their own directory tree, controls what may run over SSH (scp, sftp, rsync, etc.), and logs their activity.
 
-lshell is a shell coded in Python, that lets you restrict a user's environment to limited sets of commands, choose to enable/disable any command over SSH (e.g. SCP, SFTP, rsync, etc.), log user's commands, implement timing restriction, and more. 
+This is the **QuickBox.IO-maintained fork** of the (now unmaintained) upstream `ghantoos/lshell`. It is packaged as a standard Python wheel, supports Python 3.10–3.13, and carries security hardening specific to the QuickBox Pro seedbox platform.
 
-Note: all the following information (and more) can be found in the manpage - ```man -l man/lshell.1``` or ```man lshell```)
+## Role in QuickBox Pro
 
-Installation
-----------------
+On every QuickBox Pro install, `lshell` is the login shell for **shell-level-3 (restricted) non-admin users**. Admin and full-shell users are unaffected. A restricted user who logs in over SSH — or opens a terminal in the dashboard — lands in `lshell` instead of `bash`, and can only run the whitelisted commands their seedbox workflow needs (`rtorrent`, `rclone`, `git`, `rsync`, and so on).
 
-> [!IMPORTANT]   
-> This project has been forked from [ghantoos/lshell](https://github.com/ghantoos/lshell) as it has been abandoned by the original author. This fork is intended to keep the project alive and to add new features and bug fixes. The use of setup.py has been removed in favor of flit and the project has been updated to support Python 3.10+. `setup.py` has been removed as it utilized `distutils`, which is being deprecated from python and will be removed in Python 3.12. See [PEP 632](https://www.python.org/dev/peps/pep-0632/) for more information. As a result, the installation instructions have been updated to reflect the new installation process using flit and pip.
+The goal is containment: a restricted user can operate their seedbox but cannot escape into a general-purpose shell, read outside their home tree, or execute arbitrary code on the host.
 
+## Confinement model
 
-### 1. Install from source
-  - <strong>on Linux:</strong>
-    - Install dependencies, in this case python3 and python3-pip. You will also need the flit package (`pip3 install flit`). 
-    - Then run the following commands:
-	  ```bash
-      git clone https://lab.quickbox.io/jmsolo/lshell.git /path/to/lshell
-	  cd /path/to/lshell
-	  flit build
-	  python3 -m pip install dist/lshell-*.tar.gz
-      ```
+Each user's environment is resolved from the configuration file in this order of priority:
 
+1. `[username]` — a section named for the UNIX user
+2. `[grp:groupname]` — a section named for the user's UNIX group
+3. `[default]` — the fallback applied to everyone
 
-Configuration
-------------------------
+Key controls (see `man lshell` for the full list):
 
-lshell.conf presents a template configuration file. See etc/lshell.conf or man file for more information.
+- **`allowed`** — the exact command whitelist (or `'all'` for everything on `PATH`).
+- **`forbidden`** — characters and tokens that are rejected outright (`;`, `&`, `|`, backtick, `>`, `<`, `$(`, `${`, `sudo`, `./`, …).
+- **`path`** — the directory tree the user is geographically restricted to (e.g. `['/home/%u/']`).
+- **`overssh`** — the commands permitted to run non-interactively over SSH.
+- **`strict`** — when `1`, any unknown command is treated as forbidden and decrements the user's warning counter.
 
-A [default] profile is available for all users using lshell. Nevertheless,  you can create a [username] section or a [grp:groupname] section to customize users' preferences.
+## Security posture
 
-Order of priority when loading preferences is the following:
+The fork adds fail-closed exec protection on top of the upstream checks:
 
-1. User configuration
-2. Group configuration
-3. Default configuration
+- **Enforced `sudo_noexec.so` backstop.** Before each command runs, `lshell` prepends `LD_PRELOAD=<sudo_noexec.so>`, so a "rich" whitelisted binary (an editor, `find`, etc.) cannot `exec()` its way into a subshell.
+- **`path_noexec_strict` (QuickBox default).** When set, if the `sudo_noexec.so` library cannot be located, `lshell` **refuses to start** rather than launching a restricted shell with no exec protection. A missing backstop is treated as a hard failure, not a warning.
+- **Sanitised environment.** Inherited `LD_PRELOAD`, `LD_LIBRARY_PATH`, and `GCONV_PATH` are stripped and `PATH` is rebuilt from `env_path` / `allowed_cmd_path`, so a user cannot pre-load their own library or point the shell at their own binaries.
+- **Traversal-safe path checks.** Directory restrictions resolve real paths and reject wildcard- and dotfile-obfuscated parent-directory traversal (`.*/.*/etc/passwd`, `../../../etc/passwd`, and similar), so a user cannot walk out of their permitted tree.
+- **Forbidden-token filtering.** Command separators, redirections, and substitution syntax are blocked so a whitelisted command cannot be chained into an un-whitelisted one.
 
+## Installation and updates
 
-The primary goal of lshell, is to be able to create shell accounts with ssh access and restrict their environment to a couple a needed commands and path.
- 
-For example User 'foo' and user 'bar' both belong to the 'users' UNIX group:
+QuickBox installs and updates `lshell` as a **pre-built wheel served by the QuickBox release proxy** — there is no build toolchain on a user's box. The installer and updater:
 
-- User 'foo': 
-       - must be able to access /usr and /var but not /usr/local
-       - user all command in their PATH but 'su'
-       - has a warning counter set to 5
-       - has their home path set to '/home/users'
+1. Request the current release artifact from the release proxy.
+2. Verify it (non-empty, SHA-256, version-in-filename) **before** installing.
+3. `pip install --no-deps` the verified wheel, creating the `lshell` console entry at `/usr/bin/lshell`.
 
-- User 'bar':
-       - must be able to access /etc and /usr but not /usr/local
-       - is allowed default commands plus 'ping' minus 'ls'
-       - strictness is set to 1 (meaning he is not allowed to type an unknown command)
+This replaces the old `git clone` + `flit build` flow: no anonymous clone, no on-box build, and no chance of a failed build leaving a dangling shell symlink that locks restricted users out at login.
 
-In this case, my configuration file will look something like this:
+`lshell` is **not** distributed as a `.deb` or an RPM, and is **not** installed from source on user machines. QuickBox Pro is Debian/Ubuntu only.
 
-    # CONFIGURATION START
-    [global]
-    logpath         : /var/log/lshell/
-    loglevel        : 2
+## Configuration
 
-    [default]
-    allowed         : ['ls','pwd']
-    forbidden       : [';', '&', '|'] 
-    warning_counter : 2
-    timer           : 0
-    path            : ['/etc', '/usr']
-    env_path        : ':/sbin:/usr/foo'
-    scp             : 1 # or 0
-    sftp            : 1 # or 0
-    overssh         : ['rsync','ls']
-    aliases         : {'ls':'ls --color=auto','ll':'ls -l'}
+The **canonical** QuickBox configuration lives in the v3 repository at `src/config/system/lshell/lshell.conf` and is deployed to `/etc/lshell.conf`. Edit configuration there — do not treat any copy bundled in this repository as the source of truth. The configuration is reloaded dynamically: editing `/etc/lshell.conf` applies to already-connected users on their next command.
 
-    [grp:users]
-    warning_counter : 5
-    overssh         : - ['ls']
+## Python support
 
-    [foo]
-    allowed         : 'all' - ['su']
-    path            : ['/var', '/usr'] - ['/usr/local']
-    home_path       : '/home/users'
+`lshell` targets **Python 3.10–3.13**. The wheel is `py3-none-any` (interpreter-agnostic) and depends only on the standard library.
 
-    [bar]
-    allowed         : + ['ping'] - ['ls'] 
-    path            : - ['/usr/local']
-    strict          : 1
-    scpforce        : '/home/bar/uploads/'
-    # CONFIGURATION END
+## Development and testing
 
+The test suite lives under `test/`:
 
-Usage
---------------
+- **`test_unit.py`** — unit coverage of the security and configuration logic; this is the release gate.
+- **`test_functional.py`** — spawns `bin/lshell` via `pexpect` and exercises real confinement behaviour end to end.
 
-To launch lshell, just execute lshell specifying the location of your configuration file:
+Both run in CI (see `.github/workflows/test.yml`) across Python 3.10, 3.11, 3.12, and 3.13 on every push and pull request. To run the unit suite locally:
 
-    lshell --config /path/to/configuration/file
+```bash
+python -m unittest discover -s test -p 'test_unit.py' -v
+```
 
-In order to log a user, you will have to add them to the lshell group:
+Release artifacts (wheel + sdist) are built with `flit` and published by `.github/workflows/release.yml`; the release proxy serves the latest stable wheel to QuickBox servers.
 
-    usermod -aG lshell username
+## License and attribution
 
-In order to configure a user account to use lshell by default, you must: 
+Licensed under the **GNU General Public License v3** (see `COPYING`).
 
-    chsh -s /usr/bin/lshell user_name
-(You might need to insure that lshell is listed in /etc/shells)
-
-After this, whichever method is used by the user to log into their account, they will end up using the limited shell you configured for them!
-
-
-Contact
-----------------
-If you want to contribute to this project, please do not hesitate. Open an issue and, if possible, send a pull request.
-
-Please use the original github for all requests: https://github.com/ghantoos/lshell/issues as I am only maintaining this fork to keep the project alive. I will occasionally check the issues/PR there and work on them **here** as time permits. I am not taking any credit for this project, nor am I offering any support for it. I am simply keeping it alive and making any necessary adjustments for those who wish to use it.
-
-Cheers
+Originally written by **Ignace Mouzannar (ghantoos)**. This is the QuickBox.IO-maintained fork, kept current for modern Python and hardened for the QuickBox Pro platform.

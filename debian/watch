@@ -1,2 +1,0 @@
-version=3
-https://github.com/ghantoos/lshell/releases .*/lshell_v?(\d\S*)\.tar\.gz
