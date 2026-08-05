@@ -253,6 +253,79 @@ class TestFunctions(unittest.TestCase):
         INPUT = 'cat "$undefined_var"/etc/passwd'
         return self.assertEqual(sec.check_path(INPUT, self.userconf)[0], 1)
 
+    def test_31_scp_injection_blocked_over_ssh(self):
+        """ U31 | scp over ssh carrying a shell-injection tail must be blocked
+            before exec_cmd is ever reached. Both paths sit inside the user's
+            home so check_path passes; only the new check_secure guard in the
+            scp branch stops the ';id' tail. Fails on the pre-fix code (the raw
+            string reaches exec_cmd).
+        """
+        from lshell import utils
+        home = os.environ['HOME']
+        inj = "scp -t %s ; id" % os.path.join(home, 'x')
+        args = self.args + ["--overssh=['scp']", "--scp=1", "-c", inj]
+        os.environ['SSH_CLIENT'] = '8.8.8.8 36000 22'
+        os.environ.pop('SSH_TTY', None)
+        exec_calls = []
+        orig = utils.exec_cmd
+        utils.exec_cmd = lambda cmd: exec_calls.append(cmd) or 0
+        try:
+            with self.assertRaises(SystemExit):
+                CheckConfig(args).returnconf()
+        finally:
+            utils.exec_cmd = orig
+            os.environ.pop('SSH_CLIENT', None)
+        # the injected string must never have reached the shell
+        return self.assertEqual(exec_calls, [])
+
+    def test_32_scp_legit_passes_over_ssh(self):
+        """ U32 | a legitimate scp upload carries no shell metacharacters, so
+            the new guard passes it through to exec_cmd unchanged.
+        """
+        from lshell import utils
+        home = os.environ['HOME']
+        legit = "scp -t %s" % os.path.join(home, 'x')
+        args = self.args + ["--overssh=['scp']", "--scp=1", "-c", legit]
+        os.environ['SSH_CLIENT'] = '8.8.8.8 36000 22'
+        os.environ.pop('SSH_TTY', None)
+        exec_calls = []
+        orig = utils.exec_cmd
+        utils.exec_cmd = lambda cmd: exec_calls.append(cmd) or 0
+        try:
+            with self.assertRaises(SystemExit) as cm:
+                CheckConfig(args).returnconf()
+        finally:
+            utils.exec_cmd = orig
+            os.environ.pop('SSH_CLIENT', None)
+        self.assertEqual(exec_calls, [legit])
+        return self.assertEqual(cm.exception.code, 0)
+
+    def test_33_noexec_strict_fail_closed(self):
+        """ U33 | with path_noexec_strict set and no noexec library resolvable,
+            lshell must refuse to start rather than confine unprotected.
+        """
+        from lshell import variables
+        saved = variables.sudo_noexec_libs
+        variables.sudo_noexec_libs = []  # simulate the library being absent
+        args = self.args + ["--allowed=['echo']", "--path_noexec_strict=1"]
+        try:
+            with self.assertRaises(SystemExit) as cm:
+                CheckConfig(args).returnconf()
+        finally:
+            variables.sudo_noexec_libs = saved
+        return self.assertEqual(cm.exception.code, 2)
+
+    def test_34_sanitize_strips_ld_preload(self):
+        """ U34 | an inherited LD_PRELOAD is stripped from the environment at
+            entry (so it cannot shadow the noexec backstop) while PATH is kept.
+        """
+        os.environ['LD_PRELOAD'] = '/tmp/evil.so'
+        saved_path = os.environ.get('PATH', '')
+        CheckConfig(self.args).returnconf()
+        ld_gone = 'LD_PRELOAD' not in os.environ
+        path_kept = saved_path in os.environ.get('PATH', '')
+        return self.assertTrue(ld_gone and path_kept)
+
 
 if __name__ == "__main__":
     unittest.main()

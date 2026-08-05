@@ -19,27 +19,9 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
-
-# sys.path.append("/usr/local/lib/python3.11/site-packages/")
-# dynamically load the correct python version (check for python3 -V and if the system is utilizing site-packages or dist-packages)
-import subprocess
-
-python_version = subprocess.check_output(["python3", "-V"]).decode("utf-8")
-if "site-packages" in python_version:
-    sys.path.append("/usr/local/lib/python3.11/dist-packages/")  # for python3.11
-elif "dist-packages" in python_version:
-    sys.path.append("/usr/local/lib/python3.10/dist-packages/")  # for python3.10
-elif "Python 3.9" in python_version:
-    sys.path.append("/usr/local/lib/python3.9/site-packages/")  # for python3.9
-
 import os
-
-try:
-    import configparser
-except ImportError:
-    import configparser as configparser
+import configparser
 from getpass import getuser
-import string
 import re
 import getopt
 import logging
@@ -73,6 +55,7 @@ class CheckConfig:
 
         self.refresh = refresh
         self.conf = {}
+        self.sanitize_environment()
         self.conf, self.arguments = self.getoptions(args, self.conf)
         configfile = self.conf["configfile"]
         self.conf["config_mtime"] = self.get_config_mtime(configfile)
@@ -83,8 +66,14 @@ class CheckConfig:
         self.check_user_integrity()
         self.get_config_user()
         self.check_env()
-        self.check_scp_sftp()
+        # set_noexec must run BEFORE check_scp_sftp: it populates the LD_PRELOAD
+        # aliases, and check_scp_sftp executes over-ssh commands (rsync/rclone)
+        # through those aliases. Running it first means the exec backstop covers
+        # the over-ssh path too, not only the interactive one. It also asserts
+        # the noexec library at entry (fail-closed under path_noexec_strict)
+        # before any command is executed.
         self.set_noexec()
+        self.check_scp_sftp()
 
     def getoptions(self, arguments, conf):
         """This method checks the usage. lshell.py must be called with a
@@ -128,6 +117,19 @@ class CheckConfig:
             conf["ssh"] = os.environ["SSH_ORIGINAL_COMMAND"]
 
         return conf, args
+
+    def sanitize_environment(self):
+        """Strip dynamic-linker / loader environment variables inherited from
+        the caller before any command runs. lshell applies its own noexec
+        LD_PRELOAD via per-command aliases and rebuilds PATH from env_path /
+        allowed_cmd_path, so an inherited LD_PRELOAD / LD_LIBRARY_PATH / GCONV_PATH
+        is only an escape or library-injection surface (it could shadow the
+        noexec backstop). PATH is preserved because lshell manages it itself.
+        """
+        for var in variables.FORBIDDEN_ENVIRON:
+            if var == "PATH":
+                continue
+            os.environ.pop(var, None)
 
     def check_env(self):
         """Load environment variable set in configuration file"""
@@ -687,6 +689,29 @@ class CheckConfig:
                 # check if scp is requested and allowed
                 if self.conf["ssh"].startswith("scp "):
                     if self.conf["scp"] == 1 or "scp" in self.conf["overssh"]:
+                        # SECURITY: the scp string is about to be handed to a
+                        # shell (utils.exec_cmd, shell=True). check_path alone
+                        # does NOT stop `scp -t /home/u/x; <cmd>` because every
+                        # token resolves to a path inside the user's home, so the
+                        # injected command survives. Run the same secure filter
+                        # the generic over-ssh branch uses BEFORE executing:
+                        # a legitimate `scp -f/-t <path>` carries no shell
+                        # metacharacters and passes, while `;`/`|`/`` ` ``/`$(`
+                        # injection is blocked.
+                        # check_secure(ssh=1) validates the command against the
+                        # over-ssh list; scp reached this branch as an allowed
+                        # transfer, so make sure it is present there (it may have
+                        # been permitted via scp=1 alone) or the filter would
+                        # reject the legitimate transfer.
+                        if "scp" not in self.conf["overssh"]:
+                            self.conf["overssh"] = self.conf["overssh"] + ["scp"]
+                        ret_check_secure, self.conf = sec.check_secure(
+                            self.conf["ssh"], self.conf, strict=1, ssh=1
+                        )
+                        if ret_check_secure:
+                            self.ssh_warn(
+                                "char/command over SSH", self.conf["ssh"], "scp"
+                            )
                         if " -f " in self.conf["ssh"]:
                             # case scp download is allowed
                             if self.conf["scp_download"]:
@@ -710,7 +735,7 @@ class CheckConfig:
                                         )
                                         cmdsplit.pop(-1)
                                         cmdsplit.append(forcedpath)
-                                        self.conf["ssh"] = string.join(cmdsplit)
+                                        self.conf["ssh"] = " ".join(cmdsplit)
                                 self.log.error('SCP: PUT "%s"' % self.conf["ssh"])
                             # case scp upload is forbidden
                             else:
@@ -767,22 +792,21 @@ class CheckConfig:
         sys.exit(1)
 
     def set_noexec(self):
-        """This method checks the existence of the sudo_noexec library."""
-        # list of standard sudo_noexec.so file location
-        possible_lib = [
-            "/lib/sudo_noexec.so",
-            "/usr/lib/sudo_noexec.so",
-            "/usr/lib/sudo/sudo_noexec.so",
-            "/usr/libexec/sudo_noexec.so",
-            "/usr/libexec/sudo/sudo_noexec.so",
-            "/usr/local/lib/sudo_noexec.so",
-            "/usr/local/lib/sudo/sudo_noexec.so",
-            "/usr/local/libexec/sudo_noexec.so",
-            "/usr/local/libexec/sudo/sudo_noexec.so",
-            "/usr/pkg/libexec/sudo_noexec.so",
-            "/lib64/sudo_noexec.so",
-            "/usr/lib64/sudo/sudo_noexec.so",
-        ]
+        """Locate the sudo_noexec library and wire it in as the runtime exec
+        backstop. For every non-shell-escape command an alias is created that
+        prepends LD_PRELOAD=<lib>, so a whitelisted rich binary cannot exec() a
+        shell and break confinement.
+
+        When 'path_noexec_strict' is enabled (QuickBox default) and no library
+        can be resolved, lshell FAILS CLOSED: it refuses to start rather than
+        drop the only exec protection silently. Without strict mode the historic
+        behaviour is kept (log the gap and continue) for upstream compatibility.
+        """
+        # resolve strict posture (default off, for upstream compatibility)
+        noexec_strict = 0
+        if "path_noexec_strict" in self.conf_raw:
+            noexec_strict = self.myeval(self.conf_raw["path_noexec_strict"])
+        self.conf["path_noexec_strict"] = noexec_strict
 
         # check if alternative path is set in configuration file
         if "path_noexec" in self.conf_raw:
@@ -790,6 +814,16 @@ class CheckConfig:
             # if path_noexec is empty, disable LD_PRELOAD
             # /!\ this feature should be used at the administrator's own risks!
             if self.conf["path_noexec"] == "":
+                if noexec_strict:
+                    # an explicit opt-out contradicts strict enforcement: a jail
+                    # that requires exec protection must not also disable it.
+                    self.log.critical(
+                        "Fatal: 'path_noexec' is disabled while "
+                        "'path_noexec_strict' is set. Refusing to start a "
+                        "limited shell without exec protection."
+                    )
+                    self.stderr.write("This incident has been reported.\n")
+                    sys.exit(2)
                 return
             if not os.path.exists(self.conf["path_noexec"]):
                 self.log.critical(
@@ -799,13 +833,13 @@ class CheckConfig:
                 sys.exit(2)
         else:
             # go through the list of standard lib locations
-            for path_lib in possible_lib:
+            for path_lib in variables.sudo_noexec_libs:
                 if os.path.exists(path_lib):
                     self.conf["path_noexec"] = path_lib
                     break
 
         # in case the library was found, set the LD_PRELOAD aliases
-        if "path_noexec" in self.conf:
+        if self.conf.get("path_noexec"):
             # exclude allowed_shell_escape commands from loop
             exclude_se = list(
                 set(self.conf["allowed"])
@@ -825,6 +859,16 @@ class CheckConfig:
                         self.conf["path_noexec"],
                         cmd,
                     )
+        elif noexec_strict:
+            # strict posture: no exec backstop means a whitelisted rich binary
+            # could spawn a shell, so refuse to start rather than confine
+            # unprotected. Assert-at-entry: this runs on every login.
+            self.log.critical(
+                "Fatal: sudo_noexec library not found. Refusing to start a "
+                "limited shell without exec protection (path_noexec_strict)."
+            )
+            self.stderr.write("This incident has been reported.\n")
+            sys.exit(2)
         else:
             # if sudo_noexec.so file is not found,  write error in log file,
             # but don't exit tp  prevent strict dependency on sudo noexec lib

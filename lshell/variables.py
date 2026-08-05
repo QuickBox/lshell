@@ -89,6 +89,7 @@ configparams = [
     "history_size=",
     "history_file=",
     "path_noexec=",
+    "path_noexec_strict=",
     "allowed_shell_escape=",
     "winscp=",
     "disable_exit=",
@@ -96,6 +97,26 @@ configparams = [
 ]
 
 builtins_list = ["cd", "clear", "exit", "export", "history", "lpath", "lsudo"]
+
+# Standard on-disk locations of the sudo noexec shared object. This is the
+# runtime backstop that blocks a whitelisted rich binary (python3, git, an
+# editor, ...) from exec()ing a shell: lshell prepends LD_PRELOAD=<this> to
+# every non-shell-escape command. Kept here (not inline in set_noexec) so the
+# lookup set is single-sourced and overridable in tests.
+sudo_noexec_libs = [
+    "/lib/sudo_noexec.so",
+    "/usr/lib/sudo_noexec.so",
+    "/usr/lib/sudo/sudo_noexec.so",
+    "/usr/libexec/sudo_noexec.so",
+    "/usr/libexec/sudo/sudo_noexec.so",
+    "/usr/local/lib/sudo_noexec.so",
+    "/usr/local/lib/sudo/sudo_noexec.so",
+    "/usr/local/libexec/sudo_noexec.so",
+    "/usr/local/libexec/sudo/sudo_noexec.so",
+    "/usr/pkg/libexec/sudo_noexec.so",
+    "/lib64/sudo_noexec.so",
+    "/usr/lib64/sudo/sudo_noexec.so",
+]
 
 FORBIDDEN_ENVIRON = (
     "LD_AOUT_LIBRARY_PATH",

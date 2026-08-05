@@ -377,7 +377,11 @@ class TestFunctions(unittest.TestCase):
                                    % (TOPDIR, TOPDIR))
         self.child.expect('%s:~\$' % self.user)
 
-        expected = u'*** forbidden path: /bin/bash'
+        # lshell reports the realpath of the blocked target. On usr-merged
+        # hosts (/bin -> /usr/bin symlink: Debian 12/13, Ubuntu 22/24, the CI
+        # runner) that is /usr/bin/bash, on split-usr hosts /bin/bash. Derive
+        # the expectation the same way lshell does so the fixture is portable.
+        expected = u'*** forbidden path: %s' % os.path.realpath('/bin/bash')
         self.child.sendline('awk \'BEGIN {system("/bin/bash")}\'')
         self.child.expect('%s:~\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()

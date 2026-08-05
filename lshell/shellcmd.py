@@ -244,11 +244,7 @@ class ShellCmd(cmd.Cmd, object):
                 else:
                     if self.use_rawinput:
                         try:
-                            # raw_input renamed as input in py3
-                            try:
-                                line = input(self.conf["promptprint"])
-                            except NameError:
-                                line = eval(input(self.conf["promptprint"]))
+                            line = input(self.conf["promptprint"])
                         except EOFError:
                             line = "EOF"
                         except KeyboardInterrupt:

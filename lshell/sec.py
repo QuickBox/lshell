@@ -26,6 +26,31 @@ import glob
 # import lshell specifics
 from lshell import utils
 
+# Precompiled patterns for the command-parsing hot path. check_secure and
+# check_path run on EVERY command entered, so the static regexes they use are
+# compiled once at import instead of on every call. Behaviour is identical to
+# the previous inline re.* calls (same pattern strings); this only removes the
+# per-call cache lookups. Patterns that depend on per-user conf (the allowed /
+# denied path regexes) stay dynamic below and are intentionally NOT hoisted.
+_PATH_SEP_RE = re.compile(r"\ |;|\||&")
+_QUOTE_EDGE_RE = re.compile(r'^["\'`]|["\'`]$')
+_DOLLAR_WRAP_RE = re.compile(r"^\$[\(\{]|[\)\}]$")
+_VARGLOB_RE = re.compile(r"\$|\*|\?")
+_QUOTE_ANY_RE = re.compile("\"|'")
+_CURLY_VAR_RE = re.compile(r"\$\{(\w+)\}")
+_DOLLAR_VAR_RE = re.compile(r"\$(\w+)")
+_DQUOTE_RE = re.compile(r"[^=]\"(.+)\"")
+_SQUOTE_RE = re.compile(r"[^=]\'(.+)\'")
+_CTRL_RE = re.compile(r"[\x01-\x1F\x7F]")
+_DOLLARPAREN_RE = re.compile(r"\$\([^)]+[)]")
+_BACKTICK_RE = re.compile(r"\`[^`]+[`]")
+_CURLYBRACE_RE = re.compile(r"\$\{[^}]+[}]")
+_ASSIGNOP_RE = re.compile(r"=|\+|\?|\-")
+_TRAILPAREN_RE = re.compile(r"\)$")
+# the '&' / '|' "single but not doubled" guards, built with the original
+# per-item expression so behaviour is byte-for-byte identical.
+_AMP_PIPE_RE = {c: re.compile("[^\%s]\%s[^\%s]" % (c, c, c)) for c in ("&", "|")}
+
 
 def warn_count(messagetype, command, conf, strict=None, ssh=None):
     """Update the warning_counter, log and display a warning to the user"""
@@ -63,16 +88,15 @@ def check_path(line, conf, completion=None, ssh=None, strict=None):
     denied_path_re = str(conf["path"][1][:-1])
 
     # split line depending on the operators
-    sep = re.compile(r"\ |;|\||&")
     line = line.strip()
-    line = sep.split(line)
+    line = _PATH_SEP_RE.split(line)
 
     for item in line:
         # remove potential quotes or back-ticks
-        item = re.sub(r'^["\'`]|["\'`]$', "", item)
+        item = _QUOTE_EDGE_RE.sub("", item)
 
         # remove potential $(), ${}, ``
-        item = re.sub(r"^\$[\(\{]|[\)\}]$", "", item)
+        item = _DOLLAR_WRAP_RE.sub("", item)
 
         # if item has been converted to something other than a string
         # or an int, reconvert it to a string
@@ -90,16 +114,14 @@ def check_path(line, conf, completion=None, ssh=None, strict=None):
         # instead, reproducing shell semantics without any shell:
         #   $VAR / ${VAR} -> environment value, empty when unset (as the shell
         #   does), then glob the pattern for * ? [ ] wildcards.
-        if re.findall(r"\$|\*|\?", item):
+        if _VARGLOB_RE.findall(item):
             # remove quotes if available
-            item = re.sub("\"|'", "", item)
+            item = _QUOTE_ANY_RE.sub("", item)
             # expand ${VAR} then $VAR; an unset variable becomes empty so a
             # payload such as "$unset/etc/passwd" still resolves to the real
             # forbidden path and is caught, matching the previous behaviour.
-            item = re.sub(
-                r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), ""), item
-            )
-            item = re.sub(r"\$(\w+)", lambda m: os.environ.get(m.group(1), ""), item)
+            item = _CURLY_VAR_RE.sub(lambda m: os.environ.get(m.group(1), ""), item)
+            item = _DOLLAR_VAR_RE.sub(lambda m: os.environ.get(m.group(1), ""), item)
             # expand wildcards; take the first match sorted (shell parity), else
             # keep the literal pattern (matches shell nullglob-off behaviour).
             globbed = sorted(glob.glob(item))
@@ -157,8 +179,8 @@ def check_secure(line, conf, strict=None, ssh=None):
     # (for e.g. "'a'", 'a') but the converse would
     # require detecting single quotation stanzas
     # nested within double quotes and vice versa
-    relist = re.findall(r"[^=]\"(.+)\"", line)
-    relist2 = re.findall(r"[^=]\'(.+)\'", line)
+    relist = _DQUOTE_RE.findall(line)
+    relist2 = _SQUOTE_RE.findall(line)
     relist = relist + relist2
     for item in relist:
         if os.path.exists(item):
@@ -166,14 +188,14 @@ def check_secure(line, conf, strict=None, ssh=None):
             returncode += ret_check_path
 
     # parse command line for control characters, and warn user
-    if re.findall(r"[\x01-\x1F\x7F]", oline):
+    if _CTRL_RE.findall(oline):
         ret, conf = warn_count("control char", oline, conf, strict=strict, ssh=ssh)
         return ret, conf
 
     for item in conf["forbidden"]:
         # allow '&&' and '||' even if singles are forbidden
         if item in ["&", "|"]:
-            if re.findall("[^\%s]\%s[^\%s]" % (item, item, item), line):
+            if _AMP_PIPE_RE[item].findall(line):
                 ret, conf = warn_count("syntax", oline, conf, strict=strict, ssh=ssh)
                 return ret, conf
         else:
@@ -182,7 +204,7 @@ def check_secure(line, conf, strict=None, ssh=None):
                 return ret, conf
 
     # check if the line contains $(foo) executions, and check them
-    executions = re.findall("\$\([^)]+[)]", line)
+    executions = _DOLLARPAREN_RE.findall(line)
     for item in executions:
         # recurse on check_path
         ret_check_path, conf = check_path(item[2:-1].strip(), conf, strict=strict)
@@ -193,17 +215,17 @@ def check_secure(line, conf, strict=None, ssh=None):
         returncode += ret_check_secure
 
     # check for executions using back quotes '`'
-    executions = re.findall("\`[^`]+[`]", line)
+    executions = _BACKTICK_RE.findall(line)
     for item in executions:
         ret_check_secure, conf = check_secure(item[1:-1].strip(), conf, strict=strict)
         returncode += ret_check_secure
 
     # check if the line contains ${foo=bar}, and check them
-    curly = re.findall("\$\{[^}]+[}]", line)
+    curly = _CURLYBRACE_RE.findall(line)
     for item in curly:
         # split to get variable only, and remove last character "}"
-        if re.findall(r"=|\+|\?|\-", item):
-            variable = re.split("=|\+|\?|\-", item, 1)
+        if _ASSIGNOP_RE.findall(item):
+            variable = _ASSIGNOP_RE.split(item, 1)
         else:
             variable = item
         ret_check_path, conf = check_path(variable[1][:-1], conf, strict=strict)
@@ -240,7 +262,7 @@ def check_secure(line, conf, strict=None, ssh=None):
         lines.append(line[start : len(line)])
 
     # remove trailing parenthesis
-    line = re.sub("\)$", "", line)
+    line = _TRAILPAREN_RE.sub("", line)
     for separate_line in lines:
         separate_line = " ".join(separate_line.split())
         splitcmd = separate_line.strip().split(" ")
