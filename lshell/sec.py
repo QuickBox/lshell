@@ -22,6 +22,7 @@ import sys
 import re
 import os
 import glob
+import fnmatch
 
 # import lshell specifics
 from lshell import utils
@@ -50,6 +51,38 @@ _TRAILPAREN_RE = re.compile(r"\)$")
 # the '&' / '|' "single but not doubled" guards, built with the original
 # per-item expression so behaviour is byte-for-byte identical.
 _AMP_PIPE_RE = {c: re.compile("[^\%s]\%s[^\%s]" % (c, c, c)) for c in ("&", "|")}
+
+# path components that carry a glob metacharacter; used to spot wildcard
+# patterns a shell would expand to a parent-directory traversal.
+_GLOB_META_RE = re.compile(r"[*?\[]")
+
+
+def canonicalize_traversal_globs(item):
+    """Rewrite wildcard path components that the executing shell resolves to a
+    parent-directory ("..") traversal into a literal "..".
+
+    The command is ultimately run through /bin/sh, whose glob matches "." and
+    ".." with dot-leading wildcard patterns -- ".*.", ".?" and ".*" all expand
+    to "..". Python's glob never matches "." or "..", so such a token would
+    otherwise survive as a literal and os.path.realpath from the home directory
+    would hide the escape, allowing a forbidden path the shell would actually
+    reach. A component is treated as this kind of traversal when it begins with
+    a literal period, contains a glob metacharacter, and its pattern matches
+    "..". Rewriting to ".." lets realpath collapse the escape so the allowed /
+    denied check evaluates the true destination -- validation then matches what
+    the shell will run.
+    """
+    parts = item.split(os.sep)
+    changed = False
+    for idx, part in enumerate(parts):
+        if (
+            part.startswith(".")
+            and _GLOB_META_RE.search(part)
+            and fnmatch.fnmatch("..", part)
+        ):
+            parts[idx] = ".."
+            changed = True
+    return os.sep.join(parts) if changed else item
 
 
 def warn_count(messagetype, command, conf, strict=None, ssh=None):
@@ -105,6 +138,14 @@ def check_path(line, conf, completion=None, ssh=None, strict=None):
         # replace "~" with home path
         item = os.path.expanduser(item)
 
+        # collapse wildcard forms the exec shell would resolve to a ".."
+        # traversal (Python glob never matches "." or "..") so the escape is
+        # validated, not hidden behind a surviving literal. Run this before the
+        # variable/glob branch below so a bracket form such as ".[.]" -- which
+        # carries no $ * ? and would otherwise skip that branch -- is still
+        # caught, matching what /bin/sh will run.
+        item = canonicalize_traversal_globs(item)
+
         # expand shell variables and wildcards WITHOUT invoking a shell.
         # historically this ran "`which echo` <item>" through shell=True so the
         # shell would expand $VAR and * ? globs, then took the first result.
@@ -122,6 +163,8 @@ def check_path(line, conf, completion=None, ssh=None, strict=None):
             # forbidden path and is caught, matching the previous behaviour.
             item = _CURLY_VAR_RE.sub(lambda m: os.environ.get(m.group(1), ""), item)
             item = _DOLLAR_VAR_RE.sub(lambda m: os.environ.get(m.group(1), ""), item)
+            # re-canonicalize in case a variable expanded into a traversal glob.
+            item = canonicalize_traversal_globs(item)
             # expand wildcards; take the first match sorted (shell parity), else
             # keep the literal pattern (matches shell nullglob-off behaviour).
             globbed = sorted(glob.glob(item))

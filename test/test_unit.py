@@ -326,6 +326,52 @@ class TestFunctions(unittest.TestCase):
         path_kept = saved_path in os.environ.get('PATH', '')
         return self.assertTrue(ld_gone and path_kept)
 
+    def test_35_checkpath_wildcard_dotdot_traversal_blocked(self):
+        """ U35 | dotdot obfuscated with shell wildcards must be blocked. The
+            command runs through /bin/sh, which expands '.*.', '.?' and '.*'
+            to '..'; check_path must resolve them the same way instead of
+            treating the literal as an in-home path. Fails on the pre-fix code
+            (check_path returned 0/allowed for the obfuscated forms).
+        """
+        import tempfile
+        home = tempfile.mkdtemp()
+        deep = os.path.join(home, 'a', 'b')
+        os.makedirs(deep)
+        args = self.args + ["--path=['%s']" % home]
+        userconf = CheckConfig(args).returnconf()
+        cwd = os.getcwd()
+        os.chdir(deep)
+        try:
+            for token in ('.*./.*./.*./etc/passwd',
+                          '.?/.?/.?/etc/passwd',
+                          '.[.]/.[.]/.[.]/etc/passwd',
+                          '../../../etc/passwd'):
+                rc = sec.check_path('ls -l %s' % token, userconf)[0]
+                self.assertEqual(rc, 1,
+                                 "traversal not blocked: %s" % token)
+        finally:
+            os.chdir(cwd)
+        return None
+
+    def test_36_checkpath_legit_home_wildcard_allowed(self):
+        """ U36 | a legitimate in-home wildcard path must still resolve and
+            pass -- the dotdot-traversal guard must not over-block ordinary
+            globs that stay inside the allowed tree.
+        """
+        import tempfile
+        home = tempfile.mkdtemp()
+        os.makedirs(os.path.join(home, 'docs'))
+        open(os.path.join(home, 'docs', 'file.txt'), 'w').close()
+        args = self.args + ["--path=['%s']" % home]
+        userconf = CheckConfig(args).returnconf()
+        cwd = os.getcwd()
+        os.chdir(home)
+        try:
+            rc = sec.check_path('ls -l doc*/file.txt', userconf)[0]
+        finally:
+            os.chdir(cwd)
+        return self.assertEqual(rc, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
