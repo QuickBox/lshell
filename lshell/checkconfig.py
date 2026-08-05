@@ -73,6 +73,9 @@ class CheckConfig:
         # the noexec library at entry (fail-closed under path_noexec_strict)
         # before any command is executed.
         self.set_noexec()
+        # capture the SSH source address before check_scp_sftp, which logs
+        # forbidden over-ssh events that must carry the ' from <ip>' token
+        self.set_source_ip()
         self.check_scp_sftp()
 
     def getoptions(self, arguments, conf):
@@ -130,6 +133,24 @@ class CheckConfig:
             if var == "PATH":
                 continue
             os.environ.pop(var, None)
+
+    def set_source_ip(self):
+        """Capture the SSH client's source address once at session start and
+        store it on the conf so every security log line can carry a stable
+        ' from <ip>' token for a log-based ban tool to anchor on. sshd exports
+        SSH_CONNECTION ('<cip> <cport> <sip> <sport>') and SSH_CLIENT
+        ('<cip> <cport> <sport>'); the client address is the first token of
+        either. A local su/login has neither, so it falls back to '-'. The value
+        is charset-validated (IPv4/IPv6 characters only) so an unexpected
+        environment value cannot break the single-line log contract.
+        """
+        source_ip = "-"
+        for var in ("SSH_CONNECTION", "SSH_CLIENT"):
+            tokens = os.environ.get(var, "").split()
+            if tokens and re.match(r"^[0-9A-Fa-f:.]{1,45}$", tokens[0]):
+                source_ip = tokens[0]
+                break
+        self.conf["source_ip"] = source_ip
 
     def check_env(self):
         """Load environment variable set in configuration file"""
@@ -675,7 +696,10 @@ class CheckConfig:
                         self.log.error("SFTP disconnect")
                         sys.exit(retcode)
                     else:
-                        self.log.error("*** forbidden SFTP connection")
+                        self.log.error(
+                            "*** forbidden SFTP connection%s"
+                            % utils.log_ip_suffix(self.conf)
+                        )
                         sys.exit(1)
 
                 # initialize cli session
@@ -784,11 +808,14 @@ class CheckConfig:
 
     def ssh_warn(self, message, command="", key=""):
         """log and warn if forbidden action over SSH"""
+        suffix = utils.log_ip_suffix(self.conf)
         if key == "scp":
-            self.log.critical("*** forbidden %s" % message)
+            self.log.critical("*** forbidden %s%s" % (message, suffix))
             self.log.error("*** SCP command: %s" % command)
         else:
-            self.log.critical('*** forbidden %s: "%s"' % (message, command))
+            self.log.critical(
+                '*** forbidden %s: "%s"%s' % (message, command, suffix)
+            )
         self.stderr.write("This incident has been reported.\n")
         self.log.error("Exited")
         sys.exit(1)

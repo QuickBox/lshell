@@ -440,6 +440,147 @@ class TestFunctions(unittest.TestCase):
         # completes within an armed timeout -> real code, not the 124 timeout
         return self.assertEqual(utils.exec_cmd("true", {"command_timeout": 5}), 0)
 
+    def test_41_source_ip_captured_from_ssh_env(self):
+        """ U41 | the SSH client address is captured once at session start from
+            SSH_CONNECTION (first token) so security log lines can anchor on it.
+        """
+        os.environ.pop('SSH_CLIENT', None)
+        os.environ['SSH_CONNECTION'] = '203.0.113.7 40000 10.0.0.1 22'
+        try:
+            conf = CheckConfig(self.args).returnconf()
+            self.assertEqual(conf['source_ip'], '203.0.113.7')
+        finally:
+            os.environ.pop('SSH_CONNECTION', None)
+
+    def test_42_source_ip_fallback_dash_without_ssh(self):
+        """ U42 | with no SSH connection (local su/login) the captured address
+            falls back to the literal '-' so the log token is always present.
+        """
+        os.environ.pop('SSH_CLIENT', None)
+        os.environ.pop('SSH_CONNECTION', None)
+        conf = CheckConfig(self.args).returnconf()
+        return self.assertEqual(conf['source_ip'], '-')
+
+    def test_43_forbidden_log_line_carries_ip_suffix(self):
+        """ U43 | a forbidden command emits a log line ending in ' from <ip>' so
+            the fail2ban contract is anchorable.
+        """
+        import logging
+        args = self.args + ["--allowed=['ls']"]
+        userconf = CheckConfig(args).returnconf()
+        userconf['quiet'] = 0
+        userconf['source_ip'] = '198.51.100.9'
+        captured = []
+
+        class _Cap(logging.Handler):
+            def emit(self, record):
+                captured.append(record.getMessage())
+
+        userconf['logpath'].addHandler(_Cap())
+        sec.check_secure("ll", userconf)
+        return self.assertTrue(
+            any(m.startswith("*** forbidden") and m.endswith(" from 198.51.100.9")
+                for m in captured),
+            "no forbidden line carried the ' from <ip>' suffix: %s" % captured,
+        )
+
+    def test_44_timeout_kill_writes_logfile_with_ip(self):
+        """ U44 | a command killed by command_timeout writes a logfile line (not
+            just terminal stderr) carrying the source-ip suffix.
+        """
+        from lshell import utils
+
+        class _StubLog:
+            def __init__(self):
+                self.msgs = []
+
+            def critical(self, message):
+                self.msgs.append(message)
+
+        log = _StubLog()
+        rc = utils.exec_cmd(
+            "sleep 10",
+            {"command_timeout": 1, "source_ip": "192.0.2.5", "logpath": log},
+        )
+        self.assertEqual(rc, 124)
+        return self.assertTrue(
+            any("command_timeout" in m and m.endswith(" from 192.0.2.5")
+                for m in log.msgs),
+            "timeout kill did not log an ip-anchored line: %s" % log.msgs,
+        )
+
+    def test_45_process_limit_hit_logs_and_reraises(self):
+        """ U45 | when the fork is denied (EAGAIN, the RLIMIT_NPROC ceiling) the
+            event is logged with the ip suffix and returns 1; any other OSError
+            is re-raised unchanged.
+        """
+        import errno
+        from lshell import utils
+
+        class _StubLog:
+            def __init__(self):
+                self.msgs = []
+
+            def critical(self, message):
+                self.msgs.append(message)
+
+        orig_popen = utils.subprocess.Popen
+
+        def _eagain(*a, **k):
+            raise BlockingIOError(errno.EAGAIN, "Resource temporarily unavailable")
+
+        def _enoent(*a, **k):
+            raise OSError(errno.ENOENT, "No such file or directory")
+
+        try:
+            log = _StubLog()
+            utils.subprocess.Popen = _eagain
+            rc = utils.exec_cmd(
+                "true",
+                {"max_processes": 500, "source_ip": "192.0.2.9", "logpath": log},
+            )
+            self.assertEqual(rc, 1)
+            self.assertTrue(
+                any("process limit reached" in m and m.endswith(" from 192.0.2.9")
+                    for m in log.msgs),
+                "process-limit hit was not logged: %s" % log.msgs,
+            )
+            utils.subprocess.Popen = _enoent
+            with self.assertRaises(OSError):
+                utils.exec_cmd("true", {"max_processes": 500})
+        finally:
+            utils.subprocess.Popen = orig_popen
+
+    def test_46_forbidden_sftp_log_line_carries_ip_suffix(self):
+        """ U46 | a forbidden SFTP connection logs a line ending in ' from <ip>',
+            the same anchor class as the scp/over-ssh forbidden lines.
+        """
+        import logging
+        cc = CheckConfig(self.args)
+        cc.conf["ssh"] = "/usr/lib/openssh/sftp-server"
+        cc.conf["sftp"] = 0
+        cc.conf["source_ip"] = "203.0.113.11"
+        captured = []
+
+        class _Cap(logging.Handler):
+            def emit(self, record):
+                captured.append(record.getMessage())
+
+        cc.log.addHandler(_Cap())
+        os.environ["SSH_CLIENT"] = "203.0.113.11 40000 22"
+        os.environ.pop("SSH_TTY", None)
+        os.environ.pop("SSH_CONNECTION", None)
+        try:
+            with self.assertRaises(SystemExit):
+                cc.check_scp_sftp()
+        finally:
+            os.environ.pop("SSH_CLIENT", None)
+        return self.assertTrue(
+            any(m == "*** forbidden SFTP connection from 203.0.113.11"
+                for m in captured),
+            "forbidden SFTP line missing ip suffix: %s" % captured,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,7 @@ import os
 import sys
 import signal
 import resource
+import errno
 from getpass import getuser
 
 # import lshell specifics
@@ -84,6 +85,18 @@ def get_aliases(line, aliases):
         # remove all remaining double char
         line = line.replace("%s%s" % (char, char), "%s" % char)
     return line
+
+
+def log_ip_suffix(conf):
+    """Return the ' from <ip>' token appended to every security log line so a
+    log-based ban tool can anchor on the source address. The address is captured
+    once at session start (checkconfig.set_source_ip); when there is no SSH
+    connection (local su/login) it is the literal '-'. Written in one place so
+    the token stays byte-for-byte identical across every call site.
+    """
+    if not isinstance(conf, dict):
+        return " from -"
+    return " from %s" % (conf.get("source_ip") or "-")
 
 
 def _make_nproc_preexec(max_processes):
@@ -170,10 +183,16 @@ def exec_cmd(cmd, conf=None):
             except subprocess.TimeoutExpired:
                 _kill_process_group(proc)
                 proc.communicate()
-                sys.stderr.write(
+                message = (
                     "*** command exceeded command_timeout (%ss) and was "
-                    "terminated\n" % command_timeout
+                    "terminated" % command_timeout
                 )
+                # also write the event to the logfile so it is anchorable, not
+                # just visible on the user's terminal
+                log = conf.get("logpath") if isinstance(conf, dict) else None
+                if log is not None:
+                    log.critical("%s%s" % (message, log_ip_suffix(conf)))
+                sys.stderr.write(message + "\n")
                 # 124 is the conventional timeout(1) exit code
                 retcode = 124
         else:
@@ -186,6 +205,20 @@ def exec_cmd(cmd, conf=None):
             proc.communicate()
         # exit code for user terminated scripts is 130
         retcode = 130
+    except OSError as exc:
+        # the user's process table is exhausted: lshell itself cannot fork the
+        # command (EAGAIN under the RLIMIT_NPROC cap -- a fork bomb, or a user
+        # sitting at their ceiling). Record it to the logfile so it is anchorable
+        # and surface a clean line to the user instead of an uncaught traceback.
+        # Any other OSError is unexpected and re-raised unchanged.
+        if exc.errno != errno.EAGAIN:
+            raise
+        message = "*** process limit reached: command not run"
+        log = conf.get("logpath") if isinstance(conf, dict) else None
+        if log is not None:
+            log.critical("%s%s" % (message, log_ip_suffix(conf)))
+        sys.stderr.write(message + "\n")
+        retcode = 1
 
     return retcode
 
