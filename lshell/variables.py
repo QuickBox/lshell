@@ -18,6 +18,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import re
 import sys
 
 # single source of truth: lshell/__init__.py sets __version__ before it imports
@@ -128,6 +129,11 @@ sudo_noexec_libs = [
     "/lib64/sudo_noexec.so",
     "/usr/lib64/sudo/sudo_noexec.so",
 ]
+
+# Account names that may be substituted for %u in path, env_path and
+# allowed_cmd_path. Deliberately narrower than what the OS tolerates: no path
+# separator, glob or regex metacharacter, list separator or leading dash.
+SAFE_USERNAME_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]*")
 
 FORBIDDEN_ENVIRON = (
     "LD_AOUT_LIBRARY_PATH",

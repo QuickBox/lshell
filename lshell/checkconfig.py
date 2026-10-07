@@ -369,7 +369,7 @@ class CheckConfig:
                         elif stuff and key == "path":
                             liste = ["", ""]
                             for path in eval(stuff):
-                                for item in glob.glob(path):
+                                for item in glob.glob(self.expand_user(path)):
                                     liste[0] += os.path.realpath(item) + "/.*|"
                             # remove double slashes
                             liste[0] = liste[0].replace("//", "/")
@@ -382,13 +382,31 @@ class CheckConfig:
                 elif key == "path":
                     liste = ["", ""]
                     for path in self.myeval(value, "path"):
-                        for item in glob.glob(path):
+                        for item in glob.glob(self.expand_user(path)):
                             liste[0] += os.path.realpath(item) + "/.*|"
                     # remove double slashes
                     liste[0] = liste[0].replace("//", "/")
                     self.conf_raw.update({key: str(liste)})
                 else:
                     self.conf_raw.update(dict([item]))
+
+    def expand_user(self, value):
+        """Replace %u in a path-like setting (path, env_path, allowed_cmd_path)
+        with the logged-in account name, the same source home_path uses.
+
+        The name is spliced into filesystem globs and PATH entries, so a name
+        that could widen one is refused outright: anything outside a portable
+        account-name alphabet, or carrying '..', ends the session instead of
+        letting '/', '*', '?', '[' or ':' reshape the pattern.
+        """
+        if not isinstance(value, str) or "%u" not in value:
+            return value
+        if not variables.SAFE_USERNAME_RE.fullmatch(self.user) or ".." in self.user:
+            self.log.critical(
+                "CONF: refusing to expand %%u for account name %r" % self.user
+            )
+            sys.exit(1)
+        return value.replace("%u", self.user)
 
     def minusplus(self, confdict, key, extra):
         """update configuration lists containing -/+ operators"""
@@ -403,14 +421,14 @@ class CheckConfig:
         if extra.startswith("+"):
             if key == "path":
                 for path in sublist:
-                    liste[0] += os.path.realpath(path) + "/.*|"
+                    liste[0] += os.path.realpath(self.expand_user(path)) + "/.*|"
             else:
                 for item in sublist:
                     liste.append(item)
         elif extra.startswith("-"):
             if key == "path":
                 for path in sublist:
-                    liste[1] += os.path.realpath(path) + "/.*|"
+                    liste[1] += os.path.realpath(self.expand_user(path)) + "/.*|"
             else:
                 for item in sublist:
                     if item in liste:
@@ -583,7 +601,9 @@ class CheckConfig:
             self.conf["path"][0] = self.conf["home_path"] + ".*"
 
         if "env_path" in self.conf_raw:
-            self.conf["env_path"] = self.myeval(self.conf_raw["env_path"], "env_path")
+            self.conf["env_path"] = self.expand_user(
+                self.myeval(self.conf_raw["env_path"], "env_path")
+            )
         else:
             self.conf["env_path"] = ""
 
@@ -648,6 +668,11 @@ class CheckConfig:
         # add all commands present in allowed_cmd_path if specified
         if self.conf["allowed_cmd_path"]:
             for path in self.conf["allowed_cmd_path"]:
+                path = self.expand_user(path)
+                # a per-account directory need not exist for every account
+                if not os.path.isdir(path):
+                    self.log.error('CONF: allowed_cmd_path "%s" does not exist' % path)
+                    continue
                 # add path to PATH env variable
                 os.environ["PATH"] += ":%s" % path
                 # find executable file, and add them to allowed commands

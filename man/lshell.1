@@ -175,14 +175,24 @@ important: commands defined in 'allowed_shell_escape' override their definition
 in the \'allowed\' variable.
 .TP
 .I allowed_cmd_path
-a list of path; all executable files inside these path will be allowed
+a list of path; all executable files inside these path will be allowed. A \
+directory that does not exist is skipped. A wildcard can be used:
+.RS
+.BR \ \ \ \ %u
+-> username (e.g. '/usr/local/bin/%u')
+.RE
 .TP
 .I disable_exit
 disable user exit, this could be useful when lshell is spawned from another
 none-restricted shell (e.g. bash)
 .TP
 .I env_path
-update the environment variable $PATH of the user (optional)
+update the environment variable $PATH of the user (optional). A wildcard \
+can be used:
+.RS
+.BR \ \ \ \ %u
+-> username (e.g. ':/usr/local/bin/%u')
+.RE
 .TP
 .I env_vars
 set environment variables (optional)
@@ -221,7 +231,13 @@ password of specific user (default is empty)
 .TP
 .I path
 list of path to restrict the user geographically. It is possible to use \
-wildcards (e.g. '/var/log/ap*').
+wildcards (e.g. '/var/log/ap*'). The username can be used as well:
+.RS
+.BR \ \ \ \ %u
+-> username (e.g. '/opt/%u/')
+.RE
+A username containing a path separator, glob or list character, or '..', is \
+refused when %u is expanded in path, env_path or allowed_cmd_path.
 .TP
 .I prompt
 set the user's prompt format (default: username)

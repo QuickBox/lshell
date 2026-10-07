@@ -617,5 +617,106 @@ class TestFunctions(unittest.TestCase):
         self.assertEqual(variables.configfile, variables.default_configfile())
 
 
+    def _user_conf(self, name, *extra):
+        """Build a CheckConfig as the given account (log disabled)."""
+        from unittest import mock
+        args = self.args + ["--loglevel=0"] + list(extra)
+        with mock.patch("lshell.checkconfig.getuser", return_value=name):
+            return CheckConfig(args).returnconf()
+
+    def test_50_path_expands_username(self):
+        """ U50 | %u in path resolves to the account's own directory only """
+        import tempfile
+        base = os.path.realpath(tempfile.mkdtemp())
+        for name in ("alice", "bob"):
+            os.makedirs(os.path.join(base, name))
+        userconf = self._user_conf("alice", "--path=['%s/%%u/']" % base)
+        self.assertIn(os.path.join(base, "alice") + "/.*|", userconf["path"][0])
+        self.assertNotIn("bob", userconf["path"][0])
+        cwd = os.getcwd()
+        try:
+            self.assertEqual(
+                sec.check_path("ls %s/alice/x" % base, userconf)[0], 0)
+            self.assertEqual(
+                sec.check_path("ls %s/bob/x" % base, userconf)[0], 1)
+        finally:
+            os.chdir(cwd)
+
+    def test_51_path_plus_minus_expand_username(self):
+        """ U51 | %u is expanded in the +/- path edits too """
+        import tempfile
+        base = os.path.realpath(tempfile.mkdtemp())
+        os.makedirs(os.path.join(base, "alice", "secret"))
+        userconf = self._user_conf(
+            "alice", "--path=['%s'] - ['%s/%%u/secret']" % (base, base))
+        self.assertIn(os.path.join(base, "alice", "secret") + "/.*|",
+                      userconf["path"][1])
+        userconf = self._user_conf(
+            "alice", "--path=['%s'] + ['%s/%%u']" % (base, base))
+        self.assertIn(os.path.join(base, "alice") + "/.*|", userconf["path"][0])
+
+    def test_52_env_path_expands_username(self):
+        """ U52 | %u in env_path becomes a PATH entry for that account """
+        saved = os.environ["PATH"]
+        try:
+            userconf = self._user_conf("alice", "--env_path=':/opt/bin/%u'")
+            self.assertEqual(userconf["env_path"], ":/opt/bin/alice")
+            self.assertTrue(os.environ["PATH"].endswith(":/opt/bin/alice"))
+        finally:
+            os.environ["PATH"] = saved
+
+    def test_53_allowed_cmd_path_expands_username(self):
+        """ U53 | %u in allowed_cmd_path exposes that account's directory,
+            and an account without one is skipped rather than crashing.
+        """
+        import tempfile
+        base = os.path.realpath(tempfile.mkdtemp())
+        mine = os.path.join(base, "alice")
+        os.makedirs(mine)
+        tool = os.path.join(mine, "mytool")
+        with open(tool, "w") as fh:
+            fh.write("#!/bin/sh\n")
+        os.chmod(tool, 0o755)
+        saved = os.environ["PATH"]
+        try:
+            userconf = self._user_conf(
+                "alice", "--allowed_cmd_path=['%s/%%u']" % base)
+            self.assertIn("mytool", userconf["allowed"])
+            userconf = self._user_conf(
+                "carol", "--allowed_cmd_path=['%s/%%u']" % base)
+            self.assertNotIn("mytool", userconf["allowed"])
+        finally:
+            os.environ["PATH"] = saved
+
+    def test_54_hostile_username_never_widens(self):
+        """ U54 | an account name carrying a separator, glob, regex, list or
+            dot-dot character is refused instead of reshaping a pattern.
+        """
+        import tempfile
+        base = os.path.realpath(tempfile.mkdtemp())
+        os.makedirs(os.path.join(base, "alice"))
+        saved = os.environ["PATH"]
+        hostile = ("*", "a*", "a?", "[a-z]", "a/b", "../etc", "..", "a..b",
+                   "alice/..", "a:b", "-x", "a b", "a+b", "a|b", "")
+        try:
+            for name in hostile:
+                for opt in ("--path=['%s/%%u/']" % base,
+                            "--path=['%s'] - ['%s/%%u/']" % (base, base),
+                            "--path=['%s'] + ['%s/%%u/']" % (base, base),
+                            "--env_path=':/opt/bin/%u'",
+                            "--allowed_cmd_path=['%s/%%u']" % base):
+                    with self.assertRaises(SystemExit, msg=(name, opt)):
+                        self._user_conf(name, opt)
+        finally:
+            os.environ["PATH"] = saved
+
+    def test_55_unsafe_username_without_percent_u_unaffected(self):
+        """ U55 | a configuration that never uses %u is untouched by the
+            account-name check.
+        """
+        userconf = self._user_conf("a*b", "--path=['/tmp']")
+        self.assertIn("/tmp", userconf["path"][0])
+
+
 if __name__ == "__main__":
     unittest.main()
