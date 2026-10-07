@@ -49,7 +49,7 @@ _CURLYBRACE_RE = re.compile(r"\$\{[^}]+[}]")
 _ASSIGNOP_RE = re.compile(r"=|\+|\?|\-")
 # the '&' / '|' "single but not doubled" guards, built with the original
 # per-item expression so behaviour is byte-for-byte identical.
-_AMP_PIPE_RE = {c: re.compile("[^\%s]\%s[^\%s]" % (c, c, c)) for c in ("&", "|")}
+_AMP_PIPE_RE = {c: re.compile("[^\\%s]\\%s[^\\%s]" % (c, c, c)) for c in ("&", "|")}
 
 # path components that carry a glob metacharacter; used to spot wildcard
 # patterns a shell would expand to a parent-directory traversal.

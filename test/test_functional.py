@@ -34,7 +34,7 @@ class TestFunctions(unittest.TestCase):
         self.child = pexpect.spawn('%s/bin/lshell '
                                    '--config %s/etc/lshell.conf --strict 1'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
     def tearDown(self):
         self.child.close()
@@ -55,7 +55,7 @@ class TestFunctions(unittest.TestCase):
         cout = p.stdout
         expected = cout.read(-1)
         self.child.sendline('ls')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         output = self.child.before.decode('utf8').split('ls\r', 1)[1]
         self.assertEqual(len(expected.strip().split()),
                          len(output.strip().split()))
@@ -64,7 +64,7 @@ class TestFunctions(unittest.TestCase):
         """ F03 | external echo number """
         expected = "32"
         self.child.sendline('echo 32')
-        self.child.expect("%s:~\$" % self.user)
+        self.child.expect("%s:~\\$" % self.user)
         result = self.child.before.decode('utf8').split()[2]
         self.assertEqual(expected, result)
 
@@ -72,7 +72,7 @@ class TestFunctions(unittest.TestCase):
         """ F04 | external echo random string """
         expected = "bla blabla  32 blibli! plop."
         self.child.sendline('echo "%s"' % expected)
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1].strip()
         self.assertEqual(expected, result)
 
@@ -82,7 +82,7 @@ class TestFunctions(unittest.TestCase):
             "have 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('echo $(uptime)')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(expected, result)
 
@@ -97,9 +97,9 @@ class TestFunctions(unittest.TestCase):
                 break
         if dirpath:
             self.child.sendline('cd %s' % path)
-            self.child.expect('%s:~/%s\$' % (self.user, path))
+            self.child.expect('%s:~/%s\\$' % (self.user, path))
             self.child.sendline('cd ..')
-            self.child.expect('%s:~\$' % self.user)
+            self.child.expect('%s:~\\$' % self.user)
             result = self.child.before.decode('utf8').split('\n', 1)[1]
             self.assertEqual(expected, result)
 
@@ -109,7 +109,7 @@ class TestFunctions(unittest.TestCase):
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls ~/../../etc/passwd')
-        self.child.expect("%s:~\$" % self.user)
+        self.child.expect("%s:~\\$" % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(expected, result)
 
@@ -119,7 +119,7 @@ class TestFunctions(unittest.TestCase):
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls -ld "/"')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(expected, result)
 
@@ -129,7 +129,7 @@ class TestFunctions(unittest.TestCase):
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls ~root')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(expected, result)
 
@@ -139,7 +139,7 @@ class TestFunctions(unittest.TestCase):
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('cd ~root')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(expected, result)
 
@@ -149,7 +149,7 @@ class TestFunctions(unittest.TestCase):
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls "$a"/etc/passwd')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(expected, result)
 
@@ -159,7 +159,7 @@ class TestFunctions(unittest.TestCase):
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls -l .*./.*./etc/passwd')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(expected, result)
 
@@ -169,7 +169,7 @@ class TestFunctions(unittest.TestCase):
             " 1 warning(s) left, before getting kicked out.\r\nThis " \
             "incident has been reported.\r\n"
         self.child.sendline('ls -l .?/.?/etc/passwd')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(expected, result)
 
@@ -182,7 +182,7 @@ class TestFunctions(unittest.TestCase):
         cout = p.stdout
         expected = cout.read(-1)
         self.child.sendline('cd ~/\t\t')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         output = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(len(expected.strip().split()),
                          len(output.strip().split()))
@@ -192,7 +192,7 @@ class TestFunctions(unittest.TestCase):
         expected = '\x07\r\ncd       echo     help     ll       ls       '\
                    '\r\nclear    exit     history  lpath    lsudo'
         self.child.sendline('\t\t')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').strip()
 
         self.assertEqual(expected, result)
@@ -203,11 +203,11 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--forbidden "[]"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = "2"
         self.child.sendline('ls nRVmmn8RGypVneYIp8HxyVAvaEaD55; echo $?')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[2].strip()
         self.assertEqual(expected, result)
 
@@ -217,13 +217,13 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--forbidden "[]"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = "2"
         self.child.sendline('ls nRVmmn8RGypVneYIp8HxyVAvaEaD55')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         self.child.sendline('echo $?')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
         self.assertEqual(expected, result)
 
@@ -233,13 +233,13 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--forbidden "[]"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = "2"
         self.child.sendline('cd nRVmmn8RGypVneYIp8HxyVAvaEaD55; echo $?')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         self.child.sendline('echo $?')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
         self.assertEqual(expected, result)
 
@@ -249,13 +249,13 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--forbidden "[]"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = "2"
         self.child.sendline('cd nRVmmn8RGypVneYIp8HxyVAvaEaD55')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         self.child.sendline('echo $?')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
         self.assertEqual(expected, result)
 
@@ -267,13 +267,13 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--forbidden "[]"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = 'lshell: nRVmmn8RGypVneYIp8HxyVAvaEaD55: No such file or '\
                    'directory'
 
         self.child.sendline('cd nRVmmn8RGypVneYIp8HxyVAvaEaD55; echo $?')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
         self.assertEqual(expected, result)
 
@@ -285,13 +285,13 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--path "[\'/\'] - [\'/var\']"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = "*** forbidden path: /var/" + FROM
         self.child.sendline('cd /')
-        self.child.expect('%s:/\$' % self.user)
+        self.child.expect('%s:/\\$' % self.user)
         self.child.sendline('cd var')
-        self.child.expect('%s:/\$' % self.user)
+        self.child.expect('%s:/\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
         self.assertEqual(expected, result)
 
@@ -301,13 +301,13 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--allowed "+ [\'export\']"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = "%s/test" % os.path.expanduser('~')
         self.child.sendline('export A=test')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         self.child.sendline('echo $HOME/$A')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
         self.assertEqual(expected, result)
 
@@ -317,16 +317,16 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--allowed "+ [\'export\']"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         random = utils.random_string(32)
 
         expected = 'lshell: %s/random_%s: No such file or directory' % (
             os.path.expanduser('~'), random)
         self.child.sendline('export A=random_%s' % random)
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         self.child.sendline('cd $HOME/$A')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
         self.assertEqual(expected, result)
 
@@ -336,11 +336,11 @@ class TestFunctions(unittest.TestCase):
         self.child = pexpect.spawn('%s/bin/lshell '
                                    '--config %s/etc/lshell.conf'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = "OK"
         self.child.sendline('cd ~ && echo "OK"')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
         self.assertEqual(expected, result)
 
@@ -350,12 +350,12 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--allowed "+ [\'cat\']"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         self.child.sendline('cat')
         self.child.sendline(' foo ')
         self.child.sendcontrol('c')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         try:
             result = self.child.before.decode('utf8').split('\n')[1].strip()
             # both behaviors are correct
@@ -375,11 +375,11 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--allowed "+ [\'./foo1\', \'./foo2\']"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = u'./\x07foo\x07\r\nfoo1  foo2'
         self.child.sendline('./\t\t\t')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').strip()
 
         self.assertEqual(expected, result)
@@ -390,7 +390,7 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--allowed "+ [\'awk\']"'
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         # lshell reports the realpath of the blocked target. On usr-merged
         # hosts (/bin -> /usr/bin symlink: Debian 12/13, Ubuntu 22/24, the CI
@@ -398,7 +398,7 @@ class TestFunctions(unittest.TestCase):
         # the expectation the same way lshell does so the fixture is portable.
         expected = u'*** forbidden path: %s' % os.path.realpath('/bin/bash') + FROM
         self.child.sendline('awk \'BEGIN {system("/bin/bash")}\'')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n')[1].strip()
 
         self.assertEqual(expected, result)
@@ -408,14 +408,14 @@ class TestFunctions(unittest.TestCase):
         self.child = pexpect.spawn('%s/bin/lshell '
                                    '--config %s/etc/lshell.conf '
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = u'*** forbidden control char: echo\r'
         self.child.send('echo')
         self.child.sendcontrol('v')
         self.child.sendcontrol('j')
         self.child.sendline('bash')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         result = self.child.before.decode('utf8').split('\n')
 
@@ -426,14 +426,14 @@ class TestFunctions(unittest.TestCase):
         self.child = pexpect.spawn('%s/bin/lshell '
                                    '--config %s/etc/lshell.conf '
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = u'*** forbidden control char: echo\x0b() bash && echo' + FROM + u'\r'
         self.child.send('echo')
         self.child.sendcontrol('v')
         self.child.sendcontrol('k')
         self.child.sendline('() bash && echo')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         result = self.child.before.decode('utf8').split('\n')[1]
 
@@ -444,7 +444,7 @@ class TestFunctions(unittest.TestCase):
         expected = u"Help! Help! Help! Help! Please contact your system's" \
                    ' administrator.\r\n'
         self.child.sendline('help bleh')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
         result = self.child.before.decode('utf8').split('\n', 1)[1]
         self.assertEqual(expected, result)
 
@@ -454,11 +454,11 @@ class TestFunctions(unittest.TestCase):
                                    '--config %s/etc/lshell.conf '
                                    '--disable_exit 1 '
                                    % (TOPDIR, TOPDIR))
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         expected = u''
         self.child.sendline('exit')
-        self.child.expect('%s:~\$' % self.user)
+        self.child.expect('%s:~\\$' % self.user)
 
         result = self.child.before.decode('utf8').split('\n')[1]
 

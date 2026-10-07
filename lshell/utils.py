@@ -61,8 +61,8 @@ def get_aliases(line, aliases):
 
     for item in list(aliases.keys()):
         escaped_item = re.escape(item)
-        reg1 = "(^|;|&&|\|\||\|)\s*%s([ ;&\|]+|$)(.*)" % escaped_item
-        reg2 = "(^|;|&&|\|\||\|)\s*%s([ ;&\|]+|$)" % escaped_item
+        reg1 = "(^|;|&&|\\|\\||\\|)\\s*%s([ ;&\\|]+|$)(.*)" % escaped_item
+        reg2 = "(^|;|&&|\\|\\||\\|)\\s*%s([ ;&\\|]+|$)" % escaped_item
 
         # in case alias begins with the same command
         # (this is until i find a proper regex solution..)

@@ -351,7 +351,7 @@ class CheckConfig:
                 # if string, then split
                 split = [""]
                 if isinstance(value, str):
-                    split = re.split("([\+\-\s]+\[[^\]]+\])", value.replace(" ", ""))
+                    split = re.split("([\\+\\-\\s]+\\[[^\\]]+\\])", value.replace(" ", ""))
                 if len(split) > 1 and key in [
                     "path",
                     "overssh",

@@ -718,5 +718,37 @@ class TestFunctions(unittest.TestCase):
         self.assertIn("/tmp", userconf["path"][0])
 
 
+    def test_56_every_source_compiles_warning_free(self):
+        """ U56 | every python source in the tree compiles with warnings
+            promoted to errors, so an invalid escape sequence (a SyntaxWarning
+            today, a SyntaxError in a future Python) cannot return.
+        """
+        import warnings
+        files = []
+        for sub in ("lshell", "bin", "test"):
+            for dirpath, _dirs, names in os.walk(os.path.join(TOPDIR, sub)):
+                if "__pycache__" in dirpath:
+                    continue
+                for name in names:
+                    path = os.path.join(dirpath, name)
+                    if name.endswith(".py"):
+                        files.append(path)
+                    elif sub == "bin":
+                        with open(path, "rb") as fh:
+                            if b"python" in fh.readline():
+                                files.append(path)
+        self.assertTrue(files)
+        for path in files:
+            with open(path, "rb") as fh:
+                source = fh.read()
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                try:
+                    compile(source, path, "exec")
+                except (SyntaxWarning, DeprecationWarning,
+                        SyntaxError) as exc:
+                    self.fail("%s: %s" % (path, exc))
+
+
 if __name__ == "__main__":
     unittest.main()

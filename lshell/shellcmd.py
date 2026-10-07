@@ -149,10 +149,10 @@ class ShellCmd(cmd.Cmd, object):
             # replace previous command exit code
             # in case multiple commands (using separators), only replace first
             # command. Regex replaces all occurrences of $?, before ;,&,|
-            if re.search("[;&\|]", self.g_line):
-                p = re.compile("(\s|^)(\$\?)([\s|$]?[;&|].*)")
+            if re.search("[;&\\|]", self.g_line):
+                p = re.compile("(\\s|^)(\\$\\?)([\\s|$]?[;&|].*)")
             else:
-                p = re.compile("(\s|^)(\$\?)(\s|$)")
+                p = re.compile("(\\s|^)(\\$\\?)(\\s|$)")
             self.g_line = p.sub(r" %s \3" % self.retcode, self.g_line)
 
             if type(self.conf["aliases"]) == dict:
@@ -162,7 +162,7 @@ class ShellCmd(cmd.Cmd, object):
 
             if self.g_cmd == "cd":
                 # split cd <dir> and rest of command
-                cmd_split = re.split(";|&&|&|\|\||\|", self.g_line, 1)
+                cmd_split = re.split(";|&&|&|\\|\\||\\|", self.g_line, 1)
                 # in case the are commands following cd, first change the
                 # directory, then execute the command
                 if len(cmd_split) == 2:
@@ -295,7 +295,7 @@ class ShellCmd(cmd.Cmd, object):
             origline = readline.get_line_buffer()
             line = origline.lstrip()
             # in case '|', ';', '&' used, take last part of line to complete
-            line = re.split("&|\||;", line)[-1].lstrip()
+            line = re.split("&|\\||;", line)[-1].lstrip()
             stripped = len(origline) - len(line)
             begidx = readline.get_begidx() - stripped
             endidx = readline.get_endidx() - stripped
