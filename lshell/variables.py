@@ -28,17 +28,23 @@ from lshell import __version__
 # Required config variable list per user
 required_config = ["allowed", "forbidden", "warning_counter"]
 
-# set configuration file path depending on sys.exec_prefix
-# on *Linux sys.exec_prefix = '/usr' and default path must be in '/etc'
-# on *BSD sys.exec_prefix = '/usr/{pkg,local}/' and default path
-# is '/usr/{pkg,local}/etc'
-if sys.exec_prefix != "/usr":
-    # for *BSD
-    conf_prefix = sys.exec_prefix
-else:
-    # for *Linux
-    conf_prefix = ""
-configfile = conf_prefix + "/etc/lshell.conf"
+def default_configfile(platform=None, exec_prefix=None):
+    """Return the default configuration file path.
+
+    On Linux the file is always /etc/lshell.conf, whatever prefix the Python
+    interpreter was installed under: a locally compiled interpreter has
+    sys.exec_prefix = '/usr/local', but the configuration still lives in /etc.
+    On *BSD the file follows the interpreter prefix, which is '/usr/{pkg,local}'
+    there, so the default path is '/usr/{pkg,local}/etc/lshell.conf'.
+    """
+    platform = sys.platform if platform is None else platform
+    exec_prefix = sys.exec_prefix if exec_prefix is None else exec_prefix
+    if platform.startswith("linux") or exec_prefix == "/usr":
+        return "/etc/lshell.conf"
+    return exec_prefix + "/etc/lshell.conf"
+
+
+configfile = default_configfile()
 
 # history file
 history_file = ".lhistory"

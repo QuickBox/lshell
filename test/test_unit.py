@@ -581,6 +581,41 @@ class TestFunctions(unittest.TestCase):
             "forbidden SFTP line missing ip suffix: %s" % captured,
         )
 
+    def test_47_default_configfile_linux_any_prefix(self):
+        """ U47 | on Linux the default config file is /etc/lshell.conf
+            whether the interpreter prefix is /usr or a compiled /usr/local.
+        """
+        from lshell.variables import default_configfile
+        for prefix in ("/usr", "/usr/local", "/opt/python3.13"):
+            self.assertEqual(
+                default_configfile("linux", prefix), "/etc/lshell.conf",
+                "wrong default config path for prefix %s" % prefix,
+            )
+
+    def test_48_default_configfile_bsd_follows_prefix(self):
+        """ U48 | on *BSD the default config file follows the interpreter
+            prefix, and a /usr prefix still resolves to /etc.
+        """
+        from lshell.variables import default_configfile
+        self.assertEqual(
+            default_configfile("freebsd14", "/usr/local"),
+            "/usr/local/etc/lshell.conf",
+        )
+        self.assertEqual(
+            default_configfile("openbsd7", "/usr/pkg"),
+            "/usr/pkg/etc/lshell.conf",
+        )
+        self.assertEqual(
+            default_configfile("freebsd14", "/usr"), "/etc/lshell.conf"
+        )
+
+    def test_49_default_configfile_module_constant(self):
+        """ U49 | the module-level default is derived from the running
+            interpreter through the same helper.
+        """
+        from lshell import variables
+        self.assertEqual(variables.configfile, variables.default_configfile())
+
 
 if __name__ == "__main__":
     unittest.main()
